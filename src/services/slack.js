@@ -61,12 +61,16 @@ export function buildSlackBlocks() {
   const totalPRs = needsReReview.length + awaitingReview.length
   const truncated = totalPRs > MAX_LINES
 
+  const prLine = (pr) => {
+    const linkText = `DEFRA/${pr.repo}: ${pr.title} #${pr.number}`
+    return `• <${pr.url}|${linkText}> by @${pr.author} · ${ageText(pr.createdAt)}`
+  }
+
   if (needsReReview.length > 0) {
-    const lines = [`:arrows_counterclockwise: *Needs re-review* (${needsReReview.length}) — reviewed but new commits pushed since`]
+    const lines = [`🔄 *Needs re-review* (${needsReReview.length}) — reviewed but new commits pushed since`]
     for (const pr of needsReReview) {
       if (linesLeft === 0) break
-      const ticket = pr.jiraTicket ? `${pr.jiraTicket} · ` : ''
-      lines.push(`• \`${pr.repo}\` — ${pr.title} · ${ticket}@${pr.author} · ${ageText(pr.createdAt)}`)
+      lines.push(prLine(pr))
       linesLeft--
     }
     blocks.push({ type: 'section', text: { type: 'mrkdwn', text: lines.join('\n') } })
@@ -76,7 +80,7 @@ export function buildSlackBlocks() {
   if (awaitingReview.length > 0 && linesLeft > 0) {
     blocks.push({
       type: 'section',
-      text: { type: 'mrkdwn', text: `:eyes: *Awaiting first review* (${awaitingReview.length})` },
+      text: { type: 'mrkdwn', text: `👀 *Awaiting first review* (${awaitingReview.length})` },
     })
 
     for (const group of groupByJira(awaitingReview)) {
@@ -85,7 +89,7 @@ export function buildSlackBlocks() {
       const lines = [`*${label}* (${group.prs.length})`]
       for (const pr of group.prs) {
         if (linesLeft === 0) break
-        lines.push(`• \`${pr.repo}\` — ${pr.title} · @${pr.author} · ${ageText(pr.createdAt)}`)
+        lines.push(prLine(pr))
         linesLeft--
       }
       blocks.push({ type: 'section', text: { type: 'mrkdwn', text: lines.join('\n') } })
@@ -95,9 +99,10 @@ export function buildSlackBlocks() {
   }
 
   if (truncated) {
+    const overflow = totalPRs - MAX_LINES
     blocks.push({
       type: 'section',
-      text: { type: 'mrkdwn', text: `_${totalPRs - MAX_LINES} more PR${totalPRs - MAX_LINES !== 1 ? 's' : ''} not shown — <https://forms-pulls.apps.nodepoint.co.uk|see app for full list>_` },
+      text: { type: 'mrkdwn', text: `_${overflow} more PR${overflow !== 1 ? 's' : ''} not shown_` },
     })
   }
 
