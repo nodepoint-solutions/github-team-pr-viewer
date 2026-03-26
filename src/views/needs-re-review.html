@@ -1,0 +1,14 @@
+{% extends "layout.html" %}
+{% from "macros/filters.html" import filterForm %}
+{% from "macros/pr-table.html" import prTable %}
+{% from "govuk/components/warning-text/macro.njk" import govukWarningText %}
+{% block content %}
+  <span class="govuk-caption-l">DEFRA/forms team</span>
+  <h1 class="govuk-heading-l">{{ title }}</h1>
+  <p class="govuk-body govuk-hint">{{ description }}</p>
+  <p class="govuk-body-s govuk-hint">Last updated {{ fetchedAtFormatted }} — <form method="POST" action="/refresh" style="display:inline"><button class="govuk-link" style="background:none;border:none;padding:0;cursor:pointer;font-size:inherit">Refresh</button></form></p>
+  {{ govukWarningText({ text: "These PRs have been reviewed but new commits were pushed since. They are the highest priority for review.", iconFallbackText: "Warning" }) }}
+  {{ filterForm(repoItems, authorItems, query, "/needs-re-review") }}
+  <p class="govuk-body">Showing <strong>{{ prs.length }}</strong> pull request{{ "s" if prs.length != 1 }}</p>
+  {{ prTable(prs, query, "/needs-re-review") }}
+{% endblock %}

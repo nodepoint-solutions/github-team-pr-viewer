@@ -1,1 +1,15 @@
-export default { method: 'GET', path: '/all', handler: (_, h) => h.response('stub').code(200) }
+import { getPRs } from '../services/prs.js'
+import { applyFilters, applySort, buildViewContext } from './helpers.js'
+
+export default {
+  method: 'GET',
+  path: '/all',
+  options: { validate: { options: { allowUnknown: true }, failAction: 'ignore' } },
+  async handler(request, h) {
+    const { repo = '', author = '', sort = 'updated', dir = 'desc', cooldown } = request.query
+    const cooldownFlag = cooldown === '1'
+    const data = await getPRs()
+    const prs = applySort(applyFilters(data.prs, { repo, author }), sort, dir)
+    return h.view('all', buildViewContext(data, prs, prs, { repo, author, sort, dir }, '/all', 'All PRs', 'All open pull requests across DEFRA/forms team repositories, including bots.', cooldownFlag))
+  },
+}
