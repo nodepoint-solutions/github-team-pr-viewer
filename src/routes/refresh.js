@@ -1,4 +1,5 @@
 import * as cache from '../services/cache.js'
+import { warmCache } from '../services/prs.js'
 
 const ALLOWED = ['/', '/all', '/stale', '/unreviewed', '/needs-re-review']
 
@@ -14,7 +15,7 @@ export default {
   handler(request, h) {
     const path = safeRedirect(request.headers.referer || '/')
     if (cache.isCooldown()) return h.redirect(`${path}?cooldown=1`)
-    cache.clear()
+    warmCache().catch((err) => console.error('Manual refresh failed:', err.message))
     return h.redirect(path)
   },
 }

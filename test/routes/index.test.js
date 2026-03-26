@@ -14,6 +14,7 @@ jest.unstable_mockModule('../../src/config.js', () => ({
 
 jest.unstable_mockModule('../../src/services/prs.js', () => ({
   getPRs: mockGetPRs,
+  warmCache: jest.fn().mockResolvedValue({}),
   isBot: mockIsBot,
 }))
 

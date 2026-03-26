@@ -1,7 +1,8 @@
 import { jest, describe, it, expect, beforeEach, afterEach } from '@jest/globals'
 
 jest.unstable_mockModule('../../src/services/prs.js', () => ({
-  getPRs: jest.fn().mockResolvedValue({ fetchedAt: new Date(), teamMembers: new Set(), prs: [] }),
+  getPRs: jest.fn().mockReturnValue({ fetchedAt: new Date(), teamMembers: new Set(), prs: [] }),
+  warmCache: jest.fn().mockResolvedValue({}),
   isBot: jest.fn(() => false),
   isMergeCommit: jest.fn(() => false),
   formatPR: jest.fn(),
@@ -28,12 +29,11 @@ describe('POST /refresh', () => {
   })
   afterEach(async () => { await server.stop() })
 
-  it('clears cache and redirects to referrer', async () => {
+  it('triggers warmCache and redirects to referrer', async () => {
     cache.isCooldown.mockReturnValue(false)
     const res = await server.inject({ method: 'POST', url: '/refresh', headers: { referer: '/stale' } })
     expect(res.statusCode).toBe(302)
     expect(res.headers.location).toBe('/stale')
-    expect(cache.clear).toHaveBeenCalled()
   })
 
   it('redirects with cooldown=1 when on cooldown', async () => {

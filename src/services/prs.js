@@ -85,12 +85,17 @@ export async function runWithConcurrency(items, fn, concurrency) {
   return results
 }
 
-export async function getPRs({ force = false } = {}) {
-  const { githubToken, cacheTtlMs } = config
+const EMPTY_DATA = { fetchedAt: null, teamMembers: new Set(), prs: [] }
 
-  if (!force && !cache.isExpired(cacheTtlMs)) {
-    return cache.get()
-  }
+// Read-only cache access — never triggers API calls.
+// Returns EMPTY_DATA if the cache has not been warmed yet.
+export function getPRs() {
+  return cache.get() ?? EMPTY_DATA
+}
+
+// Fetches from GitHub and populates the cache. Called only by the scheduler.
+export async function warmCache() {
+  const { githubToken } = config
 
   const [teamMembers, repos] = await Promise.all([
     fetchAllPages(`/orgs/${ORG}/teams/${TEAM}/members`, githubToken),
