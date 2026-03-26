@@ -104,9 +104,12 @@ export async function warmCache() {
 
   const teamMembersSet = new Set(teamMembers.map((m) => m.login))
 
+  // Only include repos the team can push to — excludes read-only access to other teams' repos
+  const ownedRepos = repos.filter((repo) => repo.permissions?.push)
+
   // Fetch open PRs for all repos in parallel
   const prsByRepo = await Promise.all(
-    repos.map((repo) =>
+    ownedRepos.map((repo) =>
       fetchAllPages(
         `/repos/${ORG}/${repo.name}/pulls?state=open&per_page=100`,
         githubToken
