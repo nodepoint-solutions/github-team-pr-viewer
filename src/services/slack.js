@@ -3,10 +3,9 @@ import { getPRs, isBot } from './prs.js'
 
 let lastSentAt = null
 
-export function wasAlreadySentToday() {
+export function wasAlreadySentThisHour() {
   if (!lastSentAt) return false
-  const fmt = (d) => new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/London' }).format(d)
-  return fmt(new Date()) === fmt(lastSentAt)
+  return Date.now() - lastSentAt.getTime() < 3_600_000
 }
 
 function ageText(date) {

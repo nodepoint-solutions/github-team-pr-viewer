@@ -1,5 +1,5 @@
 import { config } from '../config.js'
-import { sendSlackSummary, wasAlreadySentToday } from '../services/slack.js'
+import { sendSlackSummary, wasAlreadySentThisHour } from '../services/slack.js'
 
 export default {
   method: 'POST',
@@ -8,7 +8,7 @@ export default {
     if (!config.slackBotToken || !config.slackChannelId) {
       return h.redirect('/?slack=not-configured')
     }
-    if (wasAlreadySentToday()) {
+    if (wasAlreadySentThisHour()) {
       return h.redirect('/?slack=cooldown')
     }
     sendSlackSummary().catch((err) => console.error('Manual Slack summary failed:', err.message))
