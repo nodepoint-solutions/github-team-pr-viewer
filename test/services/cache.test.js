@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, jest } from '@jest/globals
 
 // Use dynamic import so we can re-import a fresh module per test block
 async function freshCache() {
-  return import('../../src/services/cache.js?v=' + Date.now())
+  return import('../../src/services/cache.js?v=' + Math.random())
 }
 
 describe('cache', () => {
