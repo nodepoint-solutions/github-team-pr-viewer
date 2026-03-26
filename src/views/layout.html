@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en" class="govuk-template">
+<head>
+  <meta charset="utf-8">
+  <title>{% if title %}{{ title }} - {% endif %}PR Viewer</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="robots" content="noindex, nofollow">
+  <link rel="icon" sizes="48x48" href="/public/assets/images/favicon.ico">
+  <link rel="icon" sizes="any" href="/public/assets/images/favicon.svg" type="image/svg+xml">
+  <link rel="mask-icon" href="/public/assets/images/govuk-mask-icon.svg" color="#0b0c0c">
+  <link rel="apple-touch-icon" href="/public/assets/images/govuk-apple-touch-icon.png">
+  <link rel="stylesheet" href="/public/govuk-frontend.min.css">
+  <link rel="stylesheet" href="/assets/application.css">
+</head>
+<body class="govuk-template__body">
+  <script>document.body.className += ' js-enabled' + ('noModule' in HTMLScriptElement.prototype ? ' govuk-frontend-supported' : '');</script>
+
+  {% from "govuk/components/skip-link/macro.njk" import govukSkipLink %}
+  {{ govukSkipLink({ href: "#main-content", text: "Skip to main content" }) }}
+
+  {% from "govuk/components/header/macro.njk" import govukHeader %}
+  {{ govukHeader({
+    homepageUrl: "/",
+    serviceName: "PR Viewer",
+    serviceUrl: "/"
+  }) }}
+
+  <div class="govuk-width-container">
+    <main class="govuk-main-wrapper" id="main-content">
+      <div class="govuk-grid-row">
+
+        <div class="govuk-grid-column-one-quarter">
+          <nav class="app-subnav" aria-label="PR categories">
+            <ul class="app-subnav__list">
+
+              <li class="app-subnav__item app-subnav__item--priority{% if currentPath == '/needs-re-review' %} app-subnav__item--active{% endif %}">
+                <a class="govuk-link govuk-link--no-visited-state app-subnav__link" href="/needs-re-review">
+                  <span>Needs re-review</span>
+                  {% if navCounts %}
+                    {% from "govuk/components/tag/macro.njk" import govukTag %}
+                    {{ govukTag({ text: navCounts.needsReReview, classes: "govuk-tag--red app-count" }) }}
+                  {% endif %}
+                </a>
+              </li>
+
+              <li class="app-subnav__item{% if currentPath == '/unreviewed' %} app-subnav__item--active{% endif %}">
+                <a class="govuk-link govuk-link--no-visited-state app-subnav__link" href="/unreviewed">
+                  <span>Unreviewed</span>
+                  {% if navCounts %}
+                    {{ govukTag({ text: navCounts.unreviewed, classes: "govuk-tag--orange app-count" }) }}
+                  {% endif %}
+                </a>
+              </li>
+
+              <li class="app-subnav__item{% if currentPath == '/' %} app-subnav__item--active{% endif %}">
+                <a class="govuk-link govuk-link--no-visited-state app-subnav__link" href="/">
+                  <span>Team PRs</span>
+                  {% if navCounts %}
+                    {{ govukTag({ text: navCounts.team, classes: "govuk-tag--blue app-count" }) }}
+                  {% endif %}
+                </a>
+              </li>
+
+              <li class="app-subnav__item{% if currentPath == '/all' %} app-subnav__item--active{% endif %}">
+                <a class="govuk-link govuk-link--no-visited-state app-subnav__link" href="/all">
+                  <span>All PRs</span>
+                  {% if navCounts %}
+                    {{ govukTag({ text: navCounts.all, classes: "govuk-tag--grey app-count" }) }}
+                  {% endif %}
+                </a>
+              </li>
+
+              <li class="app-subnav__item{% if currentPath == '/stale' %} app-subnav__item--active{% endif %}">
+                <a class="govuk-link govuk-link--no-visited-state app-subnav__link" href="/stale">
+                  <span>Stale</span>
+                  {% if navCounts %}
+                    {{ govukTag({ text: navCounts.stale, classes: "govuk-tag--yellow app-count" }) }}
+                  {% endif %}
+                </a>
+              </li>
+
+            </ul>
+          </nav>
+        </div>
+
+        <div class="govuk-grid-column-three-quarters">
+          {% if cooldown %}
+            {% from "govuk/components/notification-banner/macro.njk" import govukNotificationBanner %}
+            {{ govukNotificationBanner({
+              type: "info",
+              titleText: "Refresh too soon",
+              html: "<p class=\"govuk-body\">The data was updated recently. Please wait 30 seconds before refreshing again.</p>"
+            }) }}
+          {% endif %}
+
+          {% block content %}{% endblock %}
+        </div>
+
+      </div>
+    </main>
+  </div>
+
+  <script type="module" src="/public/govuk-frontend.min.js"></script>
+</body>
+</html>

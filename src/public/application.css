@@ -1,0 +1,61 @@
+/* Side navigation */
+.app-subnav {
+  margin-top: 0;
+}
+
+.app-subnav__list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.app-subnav__item {
+  border-bottom: 1px solid #b1b4b6;
+}
+
+.app-subnav__item:first-child {
+  border-top: 1px solid #b1b4b6;
+}
+
+.app-subnav__link {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 0;
+  text-decoration: none;
+  font-size: 1rem;
+}
+
+.app-subnav__link:hover {
+  background: #f3f2f1;
+  padding-left: 5px;
+}
+
+.app-subnav__item--active .app-subnav__link {
+  font-weight: 700;
+  border-left: 4px solid #1d70b8;
+  padding-left: 8px;
+}
+
+.app-subnav__item--priority .app-subnav__link {
+  color: #d4351c;
+}
+
+.app-subnav__item--priority.app-subnav__item--active .app-subnav__link {
+  border-left-color: #d4351c;
+}
+
+/* Count badge in nav */
+.app-count {
+  min-width: 1.5em;
+  text-align: center;
+}
+
+/* PR table sort link */
+.app-sort-link {
+  white-space: nowrap;
+}
+
+.app-sort-link--active {
+  font-weight: 700;
+}
