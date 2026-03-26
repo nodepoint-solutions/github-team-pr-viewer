@@ -61,9 +61,11 @@ export function buildSlackBlocks() {
   const totalPRs = needsReReview.length + awaitingReview.length
   const truncated = totalPRs > MAX_LINES
 
+  const ghUser = (login) => `<https://github.com/${login}|@${login}>`
+
   const prLine = (pr) => {
     const linkText = `DEFRA/${pr.repo}: ${pr.title} #${pr.number}`
-    return `• <${pr.url}|${linkText}> by @${pr.author} · ${ageText(pr.createdAt)}`
+    return `• <${pr.url}|${linkText}> by ${ghUser(pr.author)} · ${ageText(pr.createdAt)}`
   }
 
   if (needsReReview.length > 0) {
