@@ -107,17 +107,24 @@ export async function warmCache() {
   // Only include repos the team can push to — excludes read-only access to other teams' repos
   const ownedRepos = repos.filter((repo) => repo.permissions?.push)
 
-  // Fetch open PRs for all repos in parallel
+  // Fetch open PRs for all repos in parallel, tolerating individual failures
   const prsByRepo = await Promise.all(
     ownedRepos.map((repo) =>
       fetchAllPages(
         `/repos/${ORG}/${repo.name}/pulls?state=open&per_page=100`,
         githubToken
-      ).catch(() => [])
+      ).catch((err) => {
+        console.error(`Failed to fetch PRs for ${repo.name}:`, err.message)
+        return null
+      })
     )
   )
 
-  const rawPRs = prsByRepo.flat()
+  // If every repo fetch failed, something is systemically wrong — preserve the old cache
+  const allFailed = ownedRepos.length > 0 && prsByRepo.every((r) => r === null)
+  if (allFailed) throw new Error('All repo PR fetches failed — preserving cached data')
+
+  const rawPRs = prsByRepo.filter((r) => r !== null).flat()
 
   // Fetch reviews + commits per PR, capped at 10 concurrent
   const prs = await runWithConcurrency(
