@@ -1,0 +1,12 @@
+{% extends "layout.html" %}
+{% block content %}
+  <h1 class="govuk-heading-l">{{ title }}</h1>
+  {% if statusCode == 404 %}
+    <p class="govuk-body">If you typed the web address, check it is correct.</p>
+    <p class="govuk-body">If you pasted the web address, check you copied the entire address.</p>
+  {% else %}
+    <p class="govuk-body">Try again in a few minutes.</p>
+    <p class="govuk-body">If the problem persists, check your <code class="govuk-body">GITHUB_TOKEN</code> environment variable is valid and has the required scopes (<code class="govuk-body">read:org</code>, <code class="govuk-body">repo</code>).</p>
+  {% endif %}
+  <p class="govuk-body"><a class="govuk-link" href="/">Go to Team PRs</a></p>
+{% endblock %}
