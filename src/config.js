@@ -3,6 +3,8 @@ const {
   GITHUB_TOKEN,
   CACHE_TTL_MS = '300000',
   NODE_ENV = 'production',
+  SLACK_BOT_TOKEN,
+  SLACK_CHANNEL_ID,
 } = process.env
 
 if (!GITHUB_TOKEN) {
@@ -14,4 +16,6 @@ export const config = {
   githubToken: GITHUB_TOKEN,
   cacheTtlMs: parseInt(CACHE_TTL_MS, 10),
   isDevelopment: NODE_ENV === 'development',
+  slackBotToken: SLACK_BOT_TOKEN ?? null,
+  slackChannelId: SLACK_CHANNEL_ID ?? null,
 }

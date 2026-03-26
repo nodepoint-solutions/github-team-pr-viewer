@@ -77,7 +77,7 @@ export function groupByJira(prs) {
   return result
 }
 
-export function buildViewContext(data, basePRs, prs, query, currentPath, title, description, cooldown = false) {
+export function buildViewContext(data, basePRs, prs, query, currentPath, title, description, cooldown = false, slackStatus = null, slackEnabled = false) {
   const repos = buildSelectOptions(basePRs, 'repo')
   const authors = buildSelectOptions(basePRs, 'author')
 
@@ -106,5 +106,7 @@ export function buildViewContext(data, basePRs, prs, query, currentPath, title, 
     navCounts: buildNavCounts(data),
     currentPath,
     cooldown,
+    slackStatus,
+    slackEnabled,
   }
 }

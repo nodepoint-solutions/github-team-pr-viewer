@@ -202,6 +202,37 @@ code {
 /* ============================================================
    ALERT BANNER (cooldown)
    ============================================================ */
+.app-sidebar__actions {
+  padding: 14px 12px;
+  border-top: 1px solid var(--border);
+  margin-top: auto;
+}
+
+.app-action-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 9px 12px;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text-muted);
+  font-family: var(--font);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.12s, color 0.12s, border-color 0.12s;
+}
+.app-action-btn:hover {
+  background: var(--surface-3);
+  color: var(--text);
+  border-color: var(--border);
+}
+.app-action-btn__icon { opacity: 0.55; flex-shrink: 0; }
+.app-action-btn:hover .app-action-btn__icon { opacity: 1; }
+
 .app-alert {
   padding: 11px 32px;
   font-size: 13px;
@@ -210,6 +241,14 @@ code {
 .app-alert--info {
   background: var(--blue-bg);
   color: var(--text-muted);
+}
+.app-alert--success {
+  background: var(--green-bg);
+  color: var(--green);
+}
+.app-alert--warning {
+  background: var(--orange-bg);
+  color: var(--orange);
 }
 
 /* ============================================================

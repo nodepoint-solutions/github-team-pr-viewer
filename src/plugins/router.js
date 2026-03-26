@@ -8,6 +8,7 @@ import staleRoute from '../routes/stale.js'
 import unreviewedRoute from '../routes/unreviewed.js'
 import needsReReviewRoute from '../routes/needs-re-review.js'
 import refreshRoute from '../routes/refresh.js'
+import slackSummaryRoute from '../routes/slack-summary.js'
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url))
 const govukDistPath = join(__dirname, '../../node_modules/govuk-frontend/dist/govuk')
@@ -33,6 +34,6 @@ export default {
     })
 
     // App routes
-    server.route([indexRoute, allRoute, staleRoute, unreviewedRoute, needsReReviewRoute, refreshRoute])
+    server.route([indexRoute, allRoute, staleRoute, unreviewedRoute, needsReReviewRoute, refreshRoute, slackSummaryRoute])
   },
 }
