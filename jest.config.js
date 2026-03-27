@@ -3,4 +3,5 @@ export default {
   transform: {},
   testMatch: ['**/test/**/*.test.js'],
   extensionsToTreatAsEsm: [],
+  setupFiles: ['./jest.setup.js'],
 }

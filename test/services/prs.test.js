@@ -5,7 +5,7 @@ jest.unstable_mockModule('../../src/config.js', () => ({
   config: { port: 3000, githubToken: 'test', cacheTtlMs: 300000, isDevelopment: false, jiraEnabled: true, jiraTicketPattern: 'DF-\\d+' },
 }))
 
-const { isBot, isMergeCommit, formatPR, runWithConcurrency } = await import('../../src/services/prs.js')
+const { isBot, isMergeCommit, formatPR, runWithConcurrency, extractJiraTicket } = await import('../../src/services/prs.js')
 
 describe('isBot', () => {
   it('returns true for user.type === Bot', () => {
@@ -155,8 +155,6 @@ describe('runWithConcurrency', () => {
     expect(results).toEqual([2, 4, 6, 8, 10])
   })
 })
-
-import { extractJiraTicket } from '../../src/services/prs.js'
 
 describe('extractJiraTicket', () => {
   it('extracts DF- ticket from title', () => {
