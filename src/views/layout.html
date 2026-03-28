@@ -38,6 +38,16 @@
           <ul class="app-nav__list">
 
             <li>
+              <a href="/needs-merging" class="app-nav__link app-nav__link--urgent{% if currentPath == '/needs-merging' %} is-active{% endif %}">
+                <svg class="app-nav__icon" viewBox="0 0 16 16" width="14" height="14" fill="currentColor" aria-hidden="true">
+                  <path d="M5.75 7.5a.75.75 0 0 1 .75.75v2.19l.72-.72a.75.75 0 1 1 1.06 1.06l-2 2a.75.75 0 0 1-1.06 0l-2-2a.75.75 0 1 1 1.06-1.06l.72.72V8.25a.75.75 0 0 1 .75-.75ZM4 4.75A.75.75 0 0 1 4.75 4h6.5a.75.75 0 0 1 0 1.5h-6.5A.75.75 0 0 1 4 4.75ZM3.25 2a.75.75 0 0 0 0 1.5h9.5a.75.75 0 0 0 0-1.5Z"/>
+                </svg>
+                <span class="app-nav__label">Needs merging</span>
+                {% if navCounts %}<span class="app-badge app-badge--green">{{ navCounts.needsMerging }}</span>{% endif %}
+              </a>
+            </li>
+
+            <li>
               <a href="/needs-re-review" class="app-nav__link app-nav__link--urgent{% if currentPath == '/needs-re-review' %} is-active{% endif %}">
                 <svg class="app-nav__icon" viewBox="0 0 16 16" width="14" height="14" fill="currentColor" aria-hidden="true">
                   <path d="M2.343 13.657A8 8 0 1 1 13.658 2.343 8 8 0 0 1 2.343 13.657ZM6.03 4.97a.75.75 0 0 0-1.06 1.06L6.94 8 4.97 9.97a.75.75 0 1 0 1.06 1.06L8 9.06l1.97 1.97a.75.75 0 1 0 1.06-1.06L9.06 8l1.97-1.97a.75.75 0 0 0-1.06-1.06L8 6.94 6.03 4.97Z"/>
