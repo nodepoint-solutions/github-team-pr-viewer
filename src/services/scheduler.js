@@ -2,6 +2,8 @@ import { warmPrCache } from './prs.js'
 import { warmDependencyCache } from './dependencies/index.js'
 import { config } from '../config.js'
 
+const MAX_ATTEMPTS = 8
+
 export function startScheduler({ skipInitial = false } = {}) {
   let running = false
 
@@ -9,9 +11,20 @@ export function startScheduler({ skipInitial = false } = {}) {
     if (running) return
     running = true
     try {
-      await Promise.all([warmPrCache(), warmDependencyCache()])
-    } catch (err) {
-      console.error('Scheduler: cache warm failed —', err.message)
+      for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+        try {
+          await Promise.all([warmPrCache(), warmDependencyCache()])
+          break
+        } catch (err) {
+          if (attempt === MAX_ATTEMPTS) {
+            console.error(`Cache warm failed after ${MAX_ATTEMPTS} attempts:`, err.message)
+            break
+          }
+          const delayMs = Math.min(1000 * Math.pow(2, attempt - 1), 60_000)
+          console.error(`Cache warm attempt ${attempt} failed, retrying in ${delayMs / 1000}s:`, err.message)
+          await new Promise((resolve) => setTimeout(resolve, delayMs))
+        }
+      }
     } finally {
       running = false
     }
