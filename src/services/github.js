@@ -55,6 +55,17 @@ export async function fetchAllPages(path, token, retries = 3, initialDelay = 100
   return results
 }
 
+export async function fetchFile(path, token) {
+  const res = await fetch(`${BASE_URL}${path}`, { headers: HEADERS(token) })
+  if (res.status === 404) return null
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}))
+    throw new Error(`GitHub API error ${res.status} on ${path}: ${body.message ?? res.statusText}`)
+  }
+  const data = await res.json()
+  return Buffer.from(data.content, 'base64').toString('utf-8')
+}
+
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 
 export async function fetchWithRetry(path, token, retries = 3, initialDelay = 1000) {

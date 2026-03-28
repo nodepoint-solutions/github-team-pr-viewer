@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, jest } from '@jest/globals'
-import { getNextPage, fetchAllPages, fetchWithRetry } from '../../src/services/github.js'
+import { getNextPage, fetchAllPages, fetchWithRetry, fetchFile } from '../../src/services/github.js'
 
 const TOKEN = 'test-token'
 
@@ -105,5 +105,46 @@ describe('fetchWithRetry', () => {
   it('throws after max retries', async () => {
     mockFetch.mockResolvedValue({ ok: false, status: 429 })
     await expect(fetchWithRetry('/test', TOKEN, 2, 0)).rejects.toThrow('Rate limited')
+  })
+})
+
+describe('fetchFile', () => {
+  let mockFetch
+
+  beforeEach(() => {
+    mockFetch = jest.fn()
+    global.fetch = mockFetch
+  })
+
+  afterEach(() => {
+    delete global.fetch
+  })
+
+  it('returns decoded file content when the file exists', async () => {
+    const content = 'hello world'
+    const encoded = Buffer.from(content).toString('base64')
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({ content: encoded }),
+    })
+    const result = await fetchFile('/repos/org/repo/contents/package.json', 'token')
+    expect(result).toBe('hello world')
+  })
+
+  it('returns null when the file does not exist (404)', async () => {
+    mockFetch.mockResolvedValueOnce({ ok: false, status: 404 })
+    const result = await fetchFile('/repos/org/repo/contents/package.json', 'token')
+    expect(result).toBeNull()
+  })
+
+  it('throws on non-404 error responses', async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: false,
+      status: 500,
+      statusText: 'Internal Server Error',
+      json: async () => ({ message: 'Server error' }),
+    })
+    await expect(fetchFile('/repos/org/repo/contents/package.json', 'token')).rejects.toThrow('GitHub API error 500')
   })
 })
