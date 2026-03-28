@@ -141,4 +141,22 @@ describe('GET /needs-merging', () => {
     const res = await server.inject({ method: 'GET', url: '/needs-merging' })
     expect(res.payload).not.toContain('dependabot')
   })
+
+  it('excludes a PR with team-member approval but changes requested by another reviewer', async () => {
+    mockGetPRs.mockResolvedValue({
+      fetchedAt: new Date(),
+      teamMembers,
+      prs: [
+        makePR({
+          reviewState: 'CHANGES_REQUESTED',
+          reviews: [
+            { user: { login: 'alice' }, state: 'APPROVED' },
+            { user: { login: 'outsider' }, state: 'CHANGES_REQUESTED' },
+          ],
+        }),
+      ],
+    })
+    const res = await server.inject({ method: 'GET', url: '/needs-merging' })
+    expect(res.payload).toContain('Showing <strong>0</strong>')
+  })
 })
