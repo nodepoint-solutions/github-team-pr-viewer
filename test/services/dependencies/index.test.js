@@ -78,14 +78,22 @@ describe('getDependencies', () => {
     expect(result.rows[0].deps['npm:hapi'].isDrift).toBe(false)
   })
 
-  it('sets pinned to null when manifest is absent (404)', async () => {
+  it('excludes repos where no tracked packages are present', async () => {
     mockFetchAllPages.mockResolvedValueOnce([{ name: 'forms-api' }])
     mockNpmAdapter.fetchLatestVersion.mockResolvedValueOnce('21.3.0')
     mockFetchFile.mockResolvedValueOnce(null)
-    mockNpmAdapter.extractVersion.mockReturnValueOnce(null)
     const result = await getDependencies()
-    expect(result.rows[0].deps['npm:hapi'].pinned).toBeNull()
-    expect(result.rows[0].deps['npm:hapi'].isDrift).toBe(false)
+    expect(result.rows).toHaveLength(0)
+  })
+
+  it('includes repos where at least one tracked package is present', async () => {
+    mockFetchAllPages.mockResolvedValueOnce([{ name: 'forms-api' }])
+    mockNpmAdapter.fetchLatestVersion.mockResolvedValueOnce('21.3.0')
+    mockFetchFile.mockResolvedValueOnce(JSON.stringify({ dependencies: { hapi: '21.3.0' } }))
+    mockNpmAdapter.extractVersion.mockReturnValueOnce('21.3.0')
+    const result = await getDependencies()
+    expect(result.rows).toHaveLength(1)
+    expect(result.rows[0].repo).toBe('forms-api')
   })
 
   it('sets latest to null when registry fetch fails', async () => {

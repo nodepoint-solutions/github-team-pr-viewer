@@ -84,9 +84,13 @@ export async function getDependencies() {
     })
   )
 
-  const driftCount = rows.filter((row) =>
+  const filteredRows = rows.filter((row) =>
+    Object.values(row.deps).some((d) => d.pinned !== null)
+  )
+
+  const driftCount = filteredRows.filter((row) =>
     Object.values(row.deps).some((d) => d.isDrift)
   ).length
 
-  return { rows, trackedDependencies, driftCount, fetchedAt: new Date() }
+  return { rows: filteredRows, trackedDependencies, driftCount, fetchedAt: new Date() }
 }
