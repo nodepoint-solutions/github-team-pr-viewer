@@ -15,6 +15,8 @@ A self-hosted dashboard that shows open pull requests for a GitHub team. It surf
 - **Team PRs** — open PRs authored by team members awaiting first review
 - **All PRs** — every open PR across team-owned repos
 - **Stale PRs** — PRs with no activity in the last 14 days
+- **Needs merging** — approved PRs that are ready to land
+- **Dependency drift** — tracks whether key packages are on their latest version across all team repos
 - **Grouped by Jira ticket** — optionally links back to your Jira instance
 - **Slack summary** — post a formatted PR digest to a Slack channel on demand
 - Background cache warming every 20 minutes (configurable)
@@ -51,6 +53,21 @@ All configuration is via environment variables. Copy `.env.example` to `.env` an
 | `CACHE_TTL_MS` | No | Cache TTL in milliseconds. Default: `1200000` (20 minutes) |
 | `SLACK_BOT_TOKEN` | No | Slack bot token (`xoxb-…`) to enable Slack summaries |
 | `SLACK_CHANNEL_ID` | No | Slack channel ID to post summaries to |
+| `TRACKED_DEPENDENCIES` | No | Comma-separated list of `ecosystem:package` pairs to track on the Dependencies page (e.g. `npm:express,npm:lodash,pypi:requests`) |
+
+### Dependency drift tracking
+
+The `/dependencies` page shows whether each tracked package is on its latest published version across all team repos. It supports npm (`package.json`) and PyPI (`requirements.txt`).
+
+Set `TRACKED_DEPENDENCIES` to a comma-separated list of `ecosystem:package` pairs:
+
+```bash
+TRACKED_DEPENDENCIES=npm:express,npm:lodash,pypi:requests,pypi:boto3
+```
+
+Each cell in the matrix shows the pinned version in that repo. Cells highlighted in amber are behind the latest version; a `—` means the package isn't present in that repo at all.
+
+Results are cached alongside the PR data and cleared when you hit **Refresh**.
 
 ### Repo filtering
 
