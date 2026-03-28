@@ -28,6 +28,9 @@ describe('pypi adapter', () => {
     it('returns null for empty content', () => {
       expect(extractVersion('', 'requests')).toBeNull()
     })
+    it('handles package names with dots (e.g. zope.interface)', () => {
+      expect(extractVersion('zope.interface==5.4.0\n', 'zope.interface')).toBe('5.4.0')
+    })
   })
 
   describe('fetchLatestVersion', () => {

@@ -2,7 +2,8 @@ export const manifestFile = 'requirements.txt'
 
 export function extractVersion(fileContent, packageName) {
   const lines = fileContent.split('\n')
-  const pattern = new RegExp(`^${packageName}[=<>!~]+(.+)$`, 'i')
+  const escaped = packageName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const pattern = new RegExp(`^${escaped}[=<>!~]+(.+)$`, 'i')
   for (const line of lines) {
     const trimmed = line.split('#')[0].trim()
     const match = trimmed.match(pattern)
