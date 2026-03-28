@@ -1,11 +1,12 @@
 name: Publish Docker image
 
 on:
-  push:
+  workflow_run:
+    workflows: ['CI']
     branches:
       - main
-    tags:
-      - 'v*'
+    types:
+      - completed
 
 env:
   IMAGE: ghcr.io/${{ github.repository }}
@@ -13,6 +14,7 @@ env:
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
     permissions:
       contents: read
       packages: write
@@ -20,6 +22,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
 
       - name: Log in to GitHub Container Registry
         uses: docker/login-action@v3
