@@ -5,22 +5,15 @@ import { startScheduler, startSlackScheduler } from './services/scheduler.js'
 import { sendSlackSummary } from './services/slack.js'
 import { config } from './config.js'
 
-// Warm PR cache before accepting any requests — start anyway if it fails so users see an error
-try {
-  await warmPrCache()
-} catch (err) {
-  console.error('Startup cache warm failed:', err.message)
-}
-
-// Warm dependency cache in the background — does not block server startup
-warmDependencyCache().catch((err) => {
-  console.error('Startup dependency cache warm failed:', err.message)
-})
-
+// Start server immediately — routes return a loading screen while caches warm
 const server = await createServer()
 await server.start()
 
 server.logger.info(`Server running at ${server.info.uri}`)
+
+// Warm caches in background — loading screen is shown until fetchedAt is set
+warmPrCache().catch((err) => console.error('Startup PR cache warm failed:', err.message))
+warmDependencyCache().catch((err) => console.error('Startup dependency cache warm failed:', err.message))
 
 // Interval refresh — skip immediate warm since we just did one above
 startScheduler({ skipInitial: true })

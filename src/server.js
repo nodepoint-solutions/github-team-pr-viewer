@@ -5,6 +5,7 @@ import nunjucks from 'nunjucks'
 import { fileURLToPath } from 'url'
 import { join } from 'path'
 import { config } from './config.js'
+import { getPRs } from './services/prs.js'
 import routerPlugin from './plugins/router.js'
 import errorsPlugin from './plugins/errors.js'
 
@@ -48,6 +49,14 @@ export async function createServer() {
     },
     path: viewsPath,
     isCached: !config.isDevelopment,
+  })
+
+  // Show loading screen on all GET routes while the cache is being warmed on startup
+  server.ext('onPreHandler', (request, h) => {
+    if (request.method !== 'get') return h.continue
+    if (request.path.startsWith('/assets/')) return h.continue
+    if (getPRs().fetchedAt !== null) return h.continue
+    return h.view('loading', { org: config.org, team: config.team }).takeover()
   })
 
   await server.register(routerPlugin)
