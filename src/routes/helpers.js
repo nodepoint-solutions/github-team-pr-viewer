@@ -52,7 +52,15 @@ export function buildSelectOptions(prs, field) {
 
 export function buildNavCounts({ prs, teamMembers }) {
   const nonBotPRs = prs.filter((pr) => pr.authorType !== 'Bot' && !pr.author.endsWith('[bot]'))
+
+  const teamApproved = (pr) => {
+    const latest = {}
+    for (const r of (pr.reviews ?? [])) latest[r.user.login] = r.state
+    return Object.entries(latest).some(([login, state]) => state === 'APPROVED' && teamMembers.has(login))
+  }
+
   return {
+    needsMerging: nonBotPRs.filter((pr) => pr.reviewState === 'APPROVED' && !pr.hasUnreviewedCommits && !pr.draft && teamApproved(pr)).length,
     needsReReview: nonBotPRs.filter((pr) => pr.isReviewed && pr.hasUnreviewedCommits && !pr.draft).length,
     unreviewed: nonBotPRs.filter((pr) => !pr.isReviewed && !pr.draft).length,
     team: nonBotPRs.filter((pr) => teamMembers.has(pr.author)).length,

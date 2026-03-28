@@ -114,24 +114,60 @@ describe('buildSelectOptions', () => {
 
 describe('buildNavCounts', () => {
   const teamMembers = new Set(['alice', 'bob'])
+
   const prs = [
     // needs-re-review
-    { author: 'alice', authorType: 'User', isReviewed: true, hasUnreviewedCommits: true, draft: false, isStale: false },
+    {
+      author: 'alice', authorType: 'User',
+      isReviewed: true, hasUnreviewedCommits: true, draft: false, isStale: false,
+      reviewState: 'APPROVED',
+      reviews: [{ user: { login: 'bob' }, state: 'APPROVED' }],
+    },
     // unreviewed
-    { author: 'bob', authorType: 'User', isReviewed: false, hasUnreviewedCommits: false, draft: false, isStale: true },
-    // draft — excluded from unreviewed + needs-re-review
-    { author: 'carol', authorType: 'User', isReviewed: false, hasUnreviewedCommits: false, draft: true, isStale: false },
-    // bot — excluded from team count
-    { author: 'dependabot[bot]', authorType: 'Bot', isReviewed: false, hasUnreviewedCommits: false, draft: false, isStale: false },
+    {
+      author: 'bob', authorType: 'User',
+      isReviewed: false, hasUnreviewedCommits: false, draft: false, isStale: true,
+      reviewState: null,
+      reviews: [],
+    },
+    // draft — excluded from unreviewed + needs-re-review + needs-merging
+    {
+      author: 'carol', authorType: 'User',
+      isReviewed: false, hasUnreviewedCommits: false, draft: true, isStale: false,
+      reviewState: null,
+      reviews: [],
+    },
+    // bot — excluded from all counts
+    {
+      author: 'dependabot[bot]', authorType: 'Bot',
+      isReviewed: false, hasUnreviewedCommits: false, draft: false, isStale: false,
+      reviewState: null,
+      reviews: [],
+    },
+    // needs-merging: approved by a team member (alice), no unreviewed commits, not draft
+    {
+      author: 'external-user', authorType: 'User',
+      isReviewed: true, hasUnreviewedCommits: false, draft: false, isStale: false,
+      reviewState: 'APPROVED',
+      reviews: [{ user: { login: 'alice' }, state: 'APPROVED' }],
+    },
+    // NOT needs-merging: approved but by a non-team-member only
+    {
+      author: 'external-user', authorType: 'User',
+      isReviewed: true, hasUnreviewedCommits: false, draft: false, isStale: false,
+      reviewState: 'APPROVED',
+      reviews: [{ user: { login: 'outsider' }, state: 'APPROVED' }],
+    },
   ]
 
   it('counts correctly', () => {
     const counts = buildNavCounts({ prs, teamMembers })
     expect(counts.needsReReview).toBe(1)
-    expect(counts.unreviewed).toBe(1) // bob only; draft excluded
-    expect(counts.team).toBe(2)       // alice + bob (carol not in team, bot excluded)
-    expect(counts.all).toBe(3)        // bots excluded
-    expect(counts.stale).toBe(1)
+    expect(counts.unreviewed).toBe(1)   // bob only; draft excluded
+    expect(counts.team).toBe(2)         // alice + bob (carol not in team, bot excluded)
+    expect(counts.all).toBe(5)          // bots excluded
+    expect(counts.stale).toBe(1)        // bob only
+    expect(counts.needsMerging).toBe(1) // external-user PR approved by alice (team member)
   })
 })
 
