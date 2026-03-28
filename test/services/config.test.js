@@ -57,4 +57,29 @@ describe('config', () => {
     expect(config.jiraTicketPattern).toBeNull()
     expect(config.jiraBaseUrl).toBeNull()
   })
+
+  it('returns empty trackedDependencies when TRACKED_DEPENDENCIES is unset', async () => {
+    delete process.env.TRACKED_DEPENDENCIES
+    const { config } = await import('../../src/config.js?v=' + Math.random())
+    expect(config.trackedDependencies).toEqual([])
+  })
+
+  it('parses TRACKED_DEPENDENCIES into ecosystem/packageName pairs', async () => {
+    process.env.TRACKED_DEPENDENCIES = 'npm:govuk-frontend,npm:hapi,pypi:requests'
+    const { config } = await import('../../src/config.js?v=' + Math.random())
+    expect(config.trackedDependencies).toEqual([
+      { ecosystem: 'npm', packageName: 'govuk-frontend' },
+      { ecosystem: 'npm', packageName: 'hapi' },
+      { ecosystem: 'pypi', packageName: 'requests' },
+    ])
+  })
+
+  it('skips malformed entries in TRACKED_DEPENDENCIES', async () => {
+    process.env.TRACKED_DEPENDENCIES = 'npm:valid,badentry,npm:also-valid'
+    const { config } = await import('../../src/config.js?v=' + Math.random())
+    expect(config.trackedDependencies).toEqual([
+      { ecosystem: 'npm', packageName: 'valid' },
+      { ecosystem: 'npm', packageName: 'also-valid' },
+    ])
+  })
 })
