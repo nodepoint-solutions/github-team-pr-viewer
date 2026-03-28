@@ -97,6 +97,16 @@
               </a>
             </li>
 
+            <li>
+              <a href="/dependencies" class="app-nav__link{% if currentPath == '/dependencies' %} is-active{% endif %}">
+                <svg class="app-nav__icon" viewBox="0 0 16 16" width="14" height="14" fill="currentColor" aria-hidden="true">
+                  <path d="M6.122.392a1.75 1.75 0 0 1 1.756 0l5.25 3.045c.54.313.872.89.872 1.514V11.05c0 .624-.332 1.2-.872 1.514l-5.25 3.045a1.75 1.75 0 0 1-1.756 0L.872 12.564C.332 12.25 0 11.674 0 11.05V4.951c0-.624.332-1.2.872-1.514Zm1.003 1.3a.25.25 0 0 0-.25 0l-5.25 3.044a.25.25 0 0 0-.125.217v6.1c0 .09.048.172.125.216l5.25 3.045a.25.25 0 0 0 .25 0l5.25-3.045a.25.25 0 0 0 .125-.216v-6.1a.25.25 0 0 0-.125-.217Z"/>
+                </svg>
+                <span class="app-nav__label">Dependencies</span>
+                {% if driftCount %}<span class="app-badge app-badge--red">{{ driftCount }}</span>{% endif %}
+              </a>
+            </li>
+
           </ul>
         </nav>
 

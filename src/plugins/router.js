@@ -8,6 +8,7 @@ import staleRoute from '../routes/stale.js'
 import unreviewedRoute from '../routes/unreviewed.js'
 import needsReReviewRoute from '../routes/needs-re-review.js'
 import needsMergingRoute from '../routes/needs-merging.js'
+import dependenciesRoute from '../routes/dependencies.js'
 import refreshRoute from '../routes/refresh.js'
 import slackSummaryRoute from '../routes/slack-summary.js'
 
@@ -19,14 +20,12 @@ export default {
   async register(server) {
     await server.register(inert)
 
-    // App-specific CSS
     server.route({
       method: 'GET',
       path: '/assets/{param*}',
       handler: { directory: { path: publicPath } },
     })
 
-    // App routes
-    server.route([indexRoute, allRoute, staleRoute, unreviewedRoute, needsReReviewRoute, needsMergingRoute, refreshRoute, slackSummaryRoute])
+    server.route([indexRoute, allRoute, staleRoute, unreviewedRoute, needsReReviewRoute, needsMergingRoute, dependenciesRoute, refreshRoute, slackSummaryRoute])
   },
 }
