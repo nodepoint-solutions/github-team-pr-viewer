@@ -39,11 +39,13 @@
               role="tab"
               aria-selected="{{ 'true' if loop.first else 'false' }}"
               data-panel="dep-panel-{{ loop.index0 }}">
-              <span class="dep-tab__name">{{ dep.packageName }}</span>
+              <span class="dep-tab__top">
+                <span class="dep-tab__name">{{ dep.packageName }}</span>
+                {% if dep.driftCount > 0 %}
+                  <span class="dep-tab__badge">{{ dep.driftCount }}</span>
+                {% endif %}
+              </span>
               <span class="dep-tab__eco">{{ dep.ecosystem }}</span>
-              {% if dep.driftCount > 0 %}
-                <span class="dep-tab__badge">{{ dep.driftCount }}</span>
-              {% endif %}
             </button>
           {% endfor %}
         </div>
