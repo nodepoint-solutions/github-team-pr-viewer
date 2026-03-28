@@ -30,7 +30,7 @@ function parseTrackedDeps(raw) {
   return raw.split(',')
     .map((entry) => {
       const trimmed = entry.trim()
-      const colon = trimmed.indexOf(':')
+      const colon = trimmed.indexOf(':') // first colon only — allows scoped names like @scope/pkg
       if (colon === -1) return null
       const ecosystem = trimmed.slice(0, colon).trim()
       const packageName = trimmed.slice(colon + 1).trim()

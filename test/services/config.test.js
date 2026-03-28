@@ -82,4 +82,13 @@ describe('config', () => {
       { ecosystem: 'npm', packageName: 'also-valid' },
     ])
   })
+
+  it('trims whitespace from entries in TRACKED_DEPENDENCIES', async () => {
+    process.env.TRACKED_DEPENDENCIES = ' npm : govuk-frontend , npm : hapi '
+    const { config } = await import('../../src/config.js?v=' + Math.random())
+    expect(config.trackedDependencies).toEqual([
+      { ecosystem: 'npm', packageName: 'govuk-frontend' },
+      { ecosystem: 'npm', packageName: 'hapi' },
+    ])
+  })
 })
