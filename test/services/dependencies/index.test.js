@@ -42,13 +42,15 @@ jest.unstable_mockModule('../../../src/services/dependencies/adapters/npm.js', (
 // test file (e.g. scheduler.test.js) has registered a mock for the same path.
 jest.resetModules()
 
-const { warmDependencyCache, getDependencies } = await import('../../../src/services/dependencies/index.js')
+const { warmDependencyCache, getDependencies, getSecurityAlerts } = await import('../../../src/services/dependencies/index.js')
 
 describe('warmDependencyCache', () => {
   beforeEach(() => {
     jest.clearAllMocks()
     mockDepCache.isExpired.mockReturnValue(true)
     mockDepCache.get.mockReturnValue(null)
+    // Default: dependabot alert calls return empty array unless overridden
+    mockFetchAllPages.mockResolvedValue([])
   })
 
   it('returns empty result when trackedDependencies is empty', async () => {
@@ -135,5 +137,93 @@ describe('getDependencies', () => {
     expect(result).toHaveProperty('rows')
     expect(result).toHaveProperty('trackedDependencies')
     expect(result).toHaveProperty('driftCount')
+  })
+})
+
+describe('getSecurityAlerts', () => {
+  it('returns empty data before cache is warmed', () => {
+    const data = getSecurityAlerts()
+    expect(data.alerts).toEqual([])
+    expect(data.alertCount).toBe(0)
+  })
+})
+
+describe('warmDependencyCache — security alerts', () => {
+  beforeEach(() => {
+    jest.clearAllMocks()
+    mockDepCache.isExpired.mockReturnValue(true)
+    mockDepCache.get.mockReturnValue(null)
+  })
+
+  it('populates securityStore with mapped alerts from all repos', async () => {
+    const { config } = await import('../../../src/config.js')
+    config.trackedDependencies = []
+
+    mockFetchAllPages.mockImplementation(async (path) => {
+      if (path.includes('/teams/') && path.includes('/repos')) {
+        return [{ name: 'forms-runner', archived: false, permissions: { admin: true } }]
+      }
+      if (path.includes('/dependabot/alerts')) {
+        return [{
+          dependency: { package: { name: 'lodash', ecosystem: 'npm' } },
+          security_advisory: { ghsa_id: 'GHSA-jf85-cpcp-j695', cve_id: 'CVE-2020-8203', summary: 'Prototype Pollution in lodash', severity: 'high' },
+          security_vulnerability: { first_patched_version: { identifier: '4.17.21' } },
+        }]
+      }
+      return []
+    })
+
+    await warmDependencyCache()
+    const security = getSecurityAlerts()
+    expect(security.alertCount).toBe(1)
+    expect(security.alerts[0]).toMatchObject({
+      repo: 'forms-runner', package: 'lodash', ecosystem: 'npm', severity: 'high',
+      title: 'Prototype Pollution in lodash', ghsaId: 'GHSA-jf85-cpcp-j695',
+      cveId: 'CVE-2020-8203', fixedIn: '4.17.21',
+    })
+  })
+
+  it('returns empty alerts for a repo when Dependabot fetch fails', async () => {
+    const { config } = await import('../../../src/config.js')
+    config.trackedDependencies = []
+
+    mockFetchAllPages.mockImplementation(async (path) => {
+      if (path.includes('/teams/') && path.includes('/repos')) {
+        return [{ name: 'forms-runner', archived: false, permissions: { admin: true } }]
+      }
+      if (path.includes('/dependabot/alerts')) {
+        throw new Error('GitHub API 403 on /dependabot/alerts: Must have admin rights')
+      }
+      return []
+    })
+
+    await warmDependencyCache()
+    const security = getSecurityAlerts()
+    expect(security.alertCount).toBe(0)
+    expect(security.alerts).toEqual([])
+  })
+
+  it('sets fixedIn to null when first_patched_version is absent', async () => {
+    const { config } = await import('../../../src/config.js')
+    config.trackedDependencies = []
+
+    mockFetchAllPages.mockImplementation(async (path) => {
+      if (path.includes('/teams/') && path.includes('/repos')) {
+        return [{ name: 'forms-runner', archived: false, permissions: { admin: true } }]
+      }
+      if (path.includes('/dependabot/alerts')) {
+        return [{
+          dependency: { package: { name: 'express', ecosystem: 'npm' } },
+          security_advisory: { ghsa_id: 'GHSA-xxxx-yyyy-zzzz', cve_id: null, summary: 'Some vulnerability', severity: 'medium' },
+          security_vulnerability: { first_patched_version: null },
+        }]
+      }
+      return []
+    })
+
+    await warmDependencyCache()
+    const security = getSecurityAlerts()
+    expect(security.alerts[0].fixedIn).toBeNull()
+    expect(security.alerts[0].cveId).toBeNull()
   })
 })

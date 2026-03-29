@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, jest } from '@jest/globals'
-import { getNextPage, fetchAllPages, fetchWithRetry, fetchFile } from '../../src/services/github.js'
+import { getNextPage, fetchAllPages, fetchWithRetry, fetchFile, aggregateCheckStatus, fetchCheckRuns } from '../../src/services/github.js'
 
 const TOKEN = 'test-token'
 
@@ -146,5 +146,134 @@ describe('fetchFile', () => {
       json: async () => ({ message: 'Server error' }),
     })
     await expect(fetchFile('/repos/org/repo/contents/package.json', 'token')).rejects.toThrow('GitHub API error 500')
+  })
+})
+
+describe('aggregateCheckStatus', () => {
+  it('returns unknown for empty array', () => {
+    expect(aggregateCheckStatus([])).toBe('unknown')
+  })
+
+  it('returns passing when all checks are success or skipped', () => {
+    expect(aggregateCheckStatus([
+      { status: 'completed', conclusion: 'success' },
+      { status: 'completed', conclusion: 'skipped' },
+    ])).toBe('passing')
+  })
+
+  it('returns passing when conclusion is neutral', () => {
+    expect(aggregateCheckStatus([
+      { status: 'completed', conclusion: 'neutral' },
+    ])).toBe('passing')
+  })
+
+  it('returns failing when any check has failure conclusion', () => {
+    expect(aggregateCheckStatus([
+      { status: 'completed', conclusion: 'success' },
+      { status: 'completed', conclusion: 'failure' },
+    ])).toBe('failing')
+  })
+
+  it('returns failing for cancelled conclusion', () => {
+    expect(aggregateCheckStatus([
+      { status: 'completed', conclusion: 'cancelled' },
+    ])).toBe('failing')
+  })
+
+  it('returns failing for timed_out conclusion', () => {
+    expect(aggregateCheckStatus([
+      { status: 'completed', conclusion: 'timed_out' },
+    ])).toBe('failing')
+  })
+
+  it('returns pending when any check is in_progress', () => {
+    expect(aggregateCheckStatus([
+      { status: 'in_progress', conclusion: null },
+    ])).toBe('pending')
+  })
+
+  it('returns pending when any check is queued (with no failures)', () => {
+    expect(aggregateCheckStatus([
+      { status: 'completed', conclusion: 'success' },
+      { status: 'queued', conclusion: null },
+    ])).toBe('pending')
+  })
+
+  it('failing takes precedence over pending', () => {
+    expect(aggregateCheckStatus([
+      { status: 'in_progress', conclusion: null },
+      { status: 'completed', conclusion: 'failure' },
+    ])).toBe('failing')
+  })
+})
+
+describe('fetchCheckRuns', () => {
+  let mockFetch
+
+  beforeEach(() => {
+    mockFetch = jest.fn()
+    global.fetch = mockFetch
+  })
+
+  afterEach(() => {
+    delete global.fetch
+  })
+
+  it('returns passing when all checks succeed', async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        check_runs: [
+          { status: 'completed', conclusion: 'success' },
+          { status: 'completed', conclusion: 'skipped' },
+        ],
+      }),
+    })
+    const result = await fetchCheckRuns('org', 'repo', 'sha123', 'TOKEN')
+    expect(result).toBe('passing')
+  })
+
+  it('returns failing when any check has failure conclusion', async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        check_runs: [
+          { status: 'completed', conclusion: 'success' },
+          { status: 'completed', conclusion: 'failure' },
+        ],
+      }),
+    })
+    const result = await fetchCheckRuns('org', 'repo', 'sha123', 'TOKEN')
+    expect(result).toBe('failing')
+  })
+
+  it('returns pending when a check is in_progress', async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        check_runs: [{ status: 'in_progress', conclusion: null }],
+      }),
+    })
+    const result = await fetchCheckRuns('org', 'repo', 'sha123', 'TOKEN')
+    expect(result).toBe('pending')
+  })
+
+  it('returns unknown when there are no check runs', async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({ check_runs: [] }),
+    })
+    const result = await fetchCheckRuns('org', 'repo', 'sha123', 'TOKEN')
+    expect(result).toBe('unknown')
+  })
+
+  it('returns unknown on fetch error', async () => {
+    mockFetch.mockRejectedValueOnce(new Error('network error'))
+    const result = await fetchCheckRuns('org', 'repo', 'sha123', 'TOKEN')
+    expect(result).toBe('unknown')
   })
 })

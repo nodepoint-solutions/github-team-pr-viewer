@@ -41,6 +41,8 @@ describe('formatPR', () => {
     created_at: '2026-01-01T00:00:00Z',
     updated_at: '2026-01-01T00:00:00Z',
     draft: false,
+    additions: 120,
+    deletions: 45,
   }
 
   it('maps basic fields correctly', () => {
@@ -135,6 +137,12 @@ describe('formatPR', () => {
     }
     const pr = formatPR(staleRawPR, [], [])
     expect(pr.isStale).toBe(true)
+  })
+
+  it('includes additions and deletions from the raw PR', () => {
+    const pr = formatPR(baseRawPR, [], [])
+    expect(pr.additions).toBe(120)
+    expect(pr.deletions).toBe(45)
   })
 
   it('sets isStale false when updatedAt is recent', () => {

@@ -98,12 +98,32 @@
             </li>
 
             <li>
+              <a href="/drafts" class="app-nav__link{% if currentPath == '/drafts' %} is-active{% endif %}">
+                <svg class="app-nav__icon" viewBox="0 0 16 16" width="14" height="14" fill="currentColor" aria-hidden="true">
+                  <path d="M11.013 1.427a1.75 1.75 0 0 1 2.474 0l1.086 1.086a1.75 1.75 0 0 1 0 2.474l-8.61 8.61c-.21.21-.47.364-.756.445l-3.251.93a.75.75 0 0 1-.927-.928l.929-3.25c.081-.286.235-.547.445-.758l8.61-8.61Zm1.414 1.06a.25.25 0 0 0-.354 0L10.811 3.75l1.439 1.44 1.263-1.263a.25.25 0 0 0 0-.354ZM11.189 6.25 9.75 4.81l-6.286 6.287a.25.25 0 0 0-.064.108l-.558 1.953 1.953-.558a.249.249 0 0 0 .108-.064Z"/>
+                </svg>
+                <span class="app-nav__label">Drafts</span>
+                {% if navCounts %}<span class="app-badge app-badge--grey">{{ navCounts.drafts }}</span>{% endif %}
+              </a>
+            </li>
+
+            <li>
               <a href="/dependencies" class="app-nav__link{% if currentPath == '/dependencies' %} is-active{% endif %}">
                 <svg class="app-nav__icon" viewBox="0 0 16 16" width="14" height="14" fill="currentColor" aria-hidden="true">
                   <path d="M6.122.392a1.75 1.75 0 0 1 1.756 0l5.25 3.045c.54.313.872.89.872 1.514V11.05c0 .624-.332 1.2-.872 1.514l-5.25 3.045a1.75 1.75 0 0 1-1.756 0L.872 12.564C.332 12.25 0 11.674 0 11.05V4.951c0-.624.332-1.2.872-1.514Zm1.003 1.3a.25.25 0 0 0-.25 0l-5.25 3.044a.25.25 0 0 0-.125.217v6.1c0 .09.048.172.125.216l5.25 3.045a.25.25 0 0 0 .25 0l5.25-3.045a.25.25 0 0 0 .125-.216v-6.1a.25.25 0 0 0-.125-.217Z"/>
                 </svg>
                 <span class="app-nav__label">Dependencies</span>
                 {% if driftCount %}<span class="app-badge app-badge--red">{{ driftCount }}</span>{% endif %}
+              </a>
+            </li>
+
+            <li>
+              <a href="/security" class="app-nav__link{% if currentPath == '/security' %} is-active{% endif %}">
+                <svg class="app-nav__icon" viewBox="0 0 16 16" width="14" height="14" fill="currentColor" aria-hidden="true">
+                  <path d="M7.467.133a1.748 1.748 0 0 1 1.066 0l5.25 1.68A1.75 1.75 0 0 1 15 3.48V7c0 1.566-.32 3.182-1.303 4.682-.983 1.498-2.585 2.813-5.032 3.855a1.697 1.697 0 0 1-1.33 0c-2.447-1.042-4.049-2.357-5.032-3.855C1.32 10.182 1 8.566 1 7V3.48a1.75 1.75 0 0 1 1.217-1.667Zm.61 1.429a.25.25 0 0 0-.153 0l-5.25 1.68a.25.25 0 0 0-.174.238V7c0 1.358.275 2.666 1.057 3.86.784 1.194 2.121 2.34 4.366 3.297a.196.196 0 0 0 .154 0c2.245-.956 3.582-2.104 4.366-3.298C13.225 9.666 13.5 8.36 13.5 7V3.48a.25.25 0 0 0-.174-.237ZM8.75 4.75v3a.75.75 0 0 1-1.5 0v-3a.75.75 0 0 1 1.5 0ZM9 10.5a1 1 0 1 1-2 0 1 1 0 0 1 2 0Z"/>
+                </svg>
+                <span class="app-nav__label">Security</span>
+                {% if alertCount %}<span class="app-badge app-badge--red">{{ alertCount }}</span>{% endif %}
               </a>
             </li>
 

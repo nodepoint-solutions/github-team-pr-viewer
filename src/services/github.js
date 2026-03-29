@@ -82,3 +82,21 @@ export async function fetchWithRetry(path, token, retries = 3, initialDelay = 10
     return res.json()
   }
 }
+
+export function aggregateCheckStatus(checkRuns) {
+  if (!checkRuns.length) return 'unknown'
+  const conclusions = checkRuns.map((r) => r.conclusion)
+  const statuses = checkRuns.map((r) => r.status)
+  if (conclusions.some((c) => c === 'failure' || c === 'cancelled' || c === 'timed_out')) return 'failing'
+  if (statuses.some((s) => s === 'in_progress' || s === 'queued' || s === 'pending')) return 'pending'
+  if (conclusions.every((c) => c === 'success' || c === 'skipped' || c === 'neutral')) return 'passing'
+  return 'unknown'
+}
+
+export async function fetchCheckRuns(org, repo, sha, token) {
+  const data = await fetchWithRetry(
+    `/repos/${org}/${repo}/commits/${sha}/check-runs?per_page=100`,
+    token
+  ).catch(() => null)
+  return aggregateCheckStatus(data?.check_runs ?? [])
+}

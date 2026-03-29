@@ -958,3 +958,6 @@ table.app-table {
   color: var(--text-subtle);
   margin: 0;
 }
+
+.app-size-add { color: var(--green); }
+.app-size-del { color: var(--red); margin-left: 0.375rem; }

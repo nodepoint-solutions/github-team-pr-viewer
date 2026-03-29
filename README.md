@@ -26,6 +26,8 @@ A self-hosted dashboard that shows open pull requests for a GitHub team. It surf
 - Node.js 22+
 - A GitHub Personal Access Token with `read:org` and `repo` scopes, authorised for SSO if your org uses it
 
+> **Security tab:** The Security tab (Dependabot alerts) requires the `security_events` scope on the token (or `repo` scope for private repositories). Without it the tab shows no alerts and logs a warning. All other features work without this scope.
+
 ## Getting started
 
 ```bash

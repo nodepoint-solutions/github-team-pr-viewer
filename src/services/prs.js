@@ -1,6 +1,6 @@
 import { config } from '../config.js'
 import * as cache from './cache.js'
-import { fetchAllPages } from './github.js'
+import { fetchAllPages, fetchCheckRuns } from './github.js'
 
 const FOURTEEN_DAYS_MS = 14 * 24 * 60 * 60 * 1000
 const JIRA_RE = config.jiraEnabled ? new RegExp(`\\b${config.jiraTicketPattern}\\b`, 'gi') : null
@@ -61,6 +61,8 @@ export function formatPR(rawPR, rawReviews, rawCommits) {
     authorType: rawPR.user.type,
     createdAt: new Date(rawPR.created_at),
     updatedAt: new Date(rawPR.updated_at),
+    additions: rawPR.additions ?? 0,
+    deletions: rawPR.deletions ?? 0,
     draft: rawPR.draft,
     reviews,
     commits,
@@ -131,11 +133,12 @@ export async function warmPrCache() {
     rawPRs,
     async (rawPR) => {
       const repoName = rawPR.base.repo.name
-      const [reviews, commits] = await Promise.all([
+      const [reviews, commits, ciStatus] = await Promise.all([
         fetchAllPages(`/repos/${org}/${repoName}/pulls/${rawPR.number}/reviews?per_page=100`, githubToken),
         fetchAllPages(`/repos/${org}/${repoName}/pulls/${rawPR.number}/commits?per_page=100`, githubToken),
+        fetchCheckRuns(org, repoName, rawPR.head.sha, githubToken),
       ])
-      return formatPR(rawPR, reviews ?? [], commits ?? [])
+      return { ...formatPR(rawPR, reviews ?? [], commits ?? []), ciStatus }
     },
     10
   )

@@ -1,16 +1,17 @@
-import { getPRs, isBot } from '../services/prs.js'
+import { config } from '../config.js'
+import { getPRs } from '../services/prs.js'
 import { applyFilters, applySort, buildViewContext } from './helpers.js'
 
 export default {
   method: 'GET',
-  path: '/stale',
+  path: '/drafts',
   options: { validate: { options: { allowUnknown: true }, failAction: 'ignore' } },
   async handler(request, h) {
     const { repo = '', author = '', sort = 'updated', dir = 'desc', groupBy = 'jira', cooldown } = request.query
     const cooldownFlag = cooldown === '1'
     const data = await getPRs()
-    const basePRs = data.prs.filter((pr) => pr.isStale && !pr.draft && !isBot({ type: pr.authorType, login: pr.author }))
+    const basePRs = data.prs.filter((pr) => pr.draft)
     const prs = applySort(applyFilters(basePRs, { repo, author }), sort, dir)
-    return h.view('stale', buildViewContext(data, prs, prs, { repo, author, sort, dir, groupBy }, '/stale', 'Stale PRs', 'Pull requests with no activity for more than 14 days.', cooldownFlag))
+    return h.view('drafts', buildViewContext(data, prs, prs, { repo, author, sort, dir, groupBy }, '/drafts', 'Drafts', `Draft pull requests across ${config.org}/${config.team} team repositories.`, cooldownFlag))
   },
 }
