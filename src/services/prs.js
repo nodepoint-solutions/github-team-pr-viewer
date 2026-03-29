@@ -105,7 +105,7 @@ export async function warmPrCache() {
   const teamMembersSet = new Set(teamMembers.map((m) => m.login))
 
   // Only include repos where the team has the required role (configurable via REQUIRED_TEAM_ROLE)
-  const ownedRepos = repos.filter((repo) => repo.permissions?.[config.requiredTeamRole])
+  const ownedRepos = repos.filter((repo) => !repo.archived && repo.permissions?.[config.requiredTeamRole])
 
   // Fetch open PRs for all repos in parallel, tolerating individual failures
   const prsByRepo = await Promise.all(
