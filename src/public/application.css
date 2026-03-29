@@ -669,6 +669,9 @@ table.app-table {
 /* Hide the summary — nav is always visible on desktop */
 .app-nav-summary { display: none; }
 
+/* Force nav content visible on desktop regardless of <details> open state */
+.app-nav-details > .app-nav { display: block; }
+
 /* ============================================================
    RESPONSIVE — MOBILE
    ============================================================ */
@@ -678,12 +681,15 @@ table.app-table {
   .app-shell { flex-direction: column; }
 
   .app-sidebar {
-    position: static;
+    position: sticky;
+    top: 0;
+    z-index: 100;
     width: 100%;
     height: auto;
     border-right: none;
     border-bottom: 1px solid var(--border);
     overflow-y: visible;
+    background: var(--surface);
   }
 
   .app-sidebar__header {
