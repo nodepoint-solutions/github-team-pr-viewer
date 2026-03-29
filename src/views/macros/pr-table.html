@@ -73,6 +73,8 @@
         </th>
 
         <th>Reviews</th>
+        <th>CI</th>
+        <th>Size</th>
         <th>Flags</th>
 
       </tr>
@@ -119,9 +121,23 @@
         </td>
 
         <td>
-          {% if pr.draft %}
-            <span class="app-pill app-pill--grey">Draft</span>
+          {% if pr.ciStatus == 'passing' %}
+            <span class="app-pill app-pill--green">Passing</span>
+          {% elif pr.ciStatus == 'failing' %}
+            <span class="app-pill app-pill--red">Failing</span>
+          {% elif pr.ciStatus == 'pending' %}
+            <span class="app-pill app-pill--yellow">Pending</span>
+          {% elif pr.ciStatus %}
+            <span class="app-pill app-pill--grey">—</span>
           {% endif %}
+        </td>
+
+        <td class="app-mono app-pr-size">
+          <span class="app-size-add">+{{ pr.additions }}</span>
+          <span class="app-size-del">-{{ pr.deletions }}</span>
+        </td>
+
+        <td>
           {% if pr.isStale %}
             <span class="app-pill app-pill--orange">Stale</span>
           {% endif %}
