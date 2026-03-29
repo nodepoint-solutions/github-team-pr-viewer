@@ -11,6 +11,7 @@ export default {
       title: 'About',
       currentPath: '/about',
       navCounts: buildNavCounts(prData),
+      fetchedAt: prData.fetchedAt,
       org: config.org,
       team: config.team,
     })
