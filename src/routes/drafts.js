@@ -1,5 +1,6 @@
 import { config } from '../config.js'
 import { getPRs } from '../services/prs.js'
+import { filterPRsForTab } from '../services/pr-filters.js'
 import { applyFilters, applySort, buildViewContext } from './helpers.js'
 
 export default {
@@ -10,7 +11,7 @@ export default {
     const { repo = '', author = '', sort = 'updated', dir = 'desc', groupBy = 'jira', cooldown } = request.query
     const cooldownFlag = cooldown === '1'
     const data = await getPRs()
-    const basePRs = data.prs.filter((pr) => pr.draft)
+    const basePRs = filterPRsForTab(data, 'drafts')
     const prs = applySort(applyFilters(basePRs, { repo, author }), sort, dir)
     return h.view('drafts', buildViewContext(data, prs, prs, { repo, author, sort, dir, groupBy }, '/drafts', 'Drafts', `Draft pull requests across ${config.org}/${config.team} team repositories.`, cooldownFlag))
   },

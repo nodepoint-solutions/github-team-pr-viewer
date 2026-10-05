@@ -81,6 +81,17 @@ describe('GET /drafts', () => {
     expect(res.payload).not.toContain('Non-draft PR')
   })
 
+  it('hides draft PRs opened by bots', async () => {
+    const prs = [
+      makePR({ number: 1, draft: true, title: 'Human draft' }),
+      makePR({ number: 2, draft: true, title: 'Bot draft', author: 'renovate[bot]', authorType: 'Bot' }),
+    ]
+    mockGetPRs.mockReturnValue({ ...mockData, prs })
+    const res = await server.inject({ method: 'GET', url: '/drafts' })
+    expect(res.payload).toContain('Human draft')
+    expect(res.payload).not.toContain('Bot draft')
+  })
+
   it('filters by repo query param', async () => {
     const prs = [
       makePR({ number: 1, draft: true, repo: 'repo-a', title: 'Draft A' }),

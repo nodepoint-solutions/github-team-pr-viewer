@@ -1,4 +1,5 @@
-import { getPRs, isBot } from '../services/prs.js'
+import { getPRs } from '../services/prs.js'
+import { filterPRsForTab } from '../services/pr-filters.js'
 import { applyFilters, applySort, buildViewContext } from './helpers.js'
 import { config } from '../config.js'
 
@@ -11,9 +12,7 @@ export default {
     const slackEnabled = !!(config.slackBotToken && config.slackChannelId)
     const data = await getPRs()
 
-    const basePRs = data.prs.filter(
-      (pr) => data.teamMembers.has(pr.author) && !pr.isReviewed && !pr.draft && !isBot({ type: pr.authorType, login: pr.author })
-    )
+    const basePRs = filterPRsForTab(data, 'team')
 
     const prs = applySort(applyFilters(basePRs, { repo, author }), sort, dir)
 

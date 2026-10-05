@@ -1,5 +1,6 @@
 import { config } from '../config.js'
-import { getPRs, isBot } from './prs.js'
+import { getPRs } from './prs.js'
+import { filterPRsForTab } from './pr-filters.js'
 import { getSecurityAlerts } from './dependencies/index.js'
 
 let lastSentAt = null
@@ -41,14 +42,11 @@ function groupByJira(prs) {
 }
 
 export function buildSlackBlocks() {
-  const { prs, teamMembers, fetchedAt } = getPRs()
+  const data = getPRs()
+  const { fetchedAt } = data
 
-  const needsReReview = prs.filter(
-    (pr) => pr.isReviewed && pr.hasUnreviewedCommits && !pr.draft && !isBot({ type: pr.authorType, login: pr.author })
-  )
-  const awaitingReview = prs.filter(
-    (pr) => !pr.isReviewed && !pr.draft && teamMembers.has(pr.author)
-  )
+  const needsReReview = filterPRsForTab(data, 'needsReReview')
+  const awaitingReview = filterPRsForTab(data, 'team')
 
   const dateStr = new Intl.DateTimeFormat('en-GB', {
     timeZone: 'Europe/London',

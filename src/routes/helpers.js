@@ -1,4 +1,5 @@
 import { config } from '../config.js'
+import { countPRsPerTab } from '../services/pr-filters.js'
 
 export function formatAge(date) {
   const ms = Date.now() - new Date(date).getTime()
@@ -50,24 +51,8 @@ export function buildSelectOptions(prs, field) {
   return [...new Set(prs.map((pr) => pr[field]))].sort()
 }
 
-export function buildNavCounts({ prs, teamMembers }) {
-  const nonBotPRs = prs.filter((pr) => pr.authorType !== 'Bot' && !pr.author.endsWith('[bot]'))
-
-  const teamApproved = (pr) => {
-    const latest = {}
-    for (const r of (pr.reviews ?? [])) latest[r.user.login] = r.state
-    return Object.entries(latest).some(([login, state]) => state === 'APPROVED' && teamMembers.has(login))
-  }
-
-  return {
-    needsMerging: nonBotPRs.filter((pr) => pr.reviewState === 'APPROVED' && !pr.hasUnreviewedCommits && !pr.draft && teamApproved(pr)).length,
-    needsReReview: nonBotPRs.filter((pr) => pr.isReviewed && pr.hasUnreviewedCommits && !pr.draft).length,
-    unreviewed: nonBotPRs.filter((pr) => !pr.isReviewed && !pr.draft).length,
-    team: nonBotPRs.filter((pr) => teamMembers.has(pr.author) && !pr.draft).length,
-    all: nonBotPRs.filter((pr) => !pr.draft).length,
-    stale: nonBotPRs.filter((pr) => pr.isStale && !pr.draft).length,
-    drafts: nonBotPRs.filter((pr) => pr.draft).length,
-  }
+export function buildNavCounts(data) {
+  return countPRsPerTab(data)
 }
 
 export function groupByJira(prs) {

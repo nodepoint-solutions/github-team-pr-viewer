@@ -137,6 +137,13 @@ describe('buildNavCounts', () => {
       reviewState: null,
       reviews: [],
     },
+    // bot draft — excluded from all counts
+    {
+      author: 'renovate[bot]', authorType: 'Bot',
+      isReviewed: false, hasUnreviewedCommits: false, draft: true, isStale: false,
+      reviewState: null,
+      reviews: [],
+    },
     // bot — excluded from all counts
     {
       author: 'dependabot[bot]', authorType: 'Bot',
@@ -164,7 +171,7 @@ describe('buildNavCounts', () => {
     const counts = buildNavCounts({ prs, teamMembers })
     expect(counts.needsReReview).toBe(1)
     expect(counts.unreviewed).toBe(1)   // bob only; draft excluded
-    expect(counts.team).toBe(2)         // alice + bob (carol is draft, not team; bot excluded)
+    expect(counts.team).toBe(1)         // bob only; alice's PR is already reviewed
     expect(counts.all).toBe(4)          // bots excluded, draft excluded (was 5)
     expect(counts.stale).toBe(1)        // bob only
     expect(counts.needsMerging).toBe(1) // external-user PR approved by alice (team member)

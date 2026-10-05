@@ -18,6 +18,7 @@ src/
   services/
     github.js   # Low-level API client (pagination, retries, rate limit backoff)
     prs.js      # Cache warming, PR formatting
+    pr-filters.js # One rule per tab, shared by pages, nav badges and Slack
     cache.js    # Singleton in-memory PR store
     dep-cache.js# Keyed cache for dependency manifest + registry lookups
     scheduler.js# Background warm loop + daily Slack summary
@@ -45,6 +46,7 @@ There are six touch points. Follow this order:
 
 ```js
 import { getPRs } from '../services/prs.js'
+import { filterPRsForTab } from '../services/pr-filters.js'
 import { applyFilters, applySort, buildViewContext } from './helpers.js'
 
 export default {
@@ -54,7 +56,7 @@ export default {
   async handler(request, h) {
     const { repo = '', author = '', sort = 'updated', dir = 'desc', groupBy = 'jira' } = request.query
     const data = await getPRs()
-    const basePRs = data.prs.filter((pr) => /* your filter */)
+    const basePRs = filterPRsForTab(data, 'yourTab')
     const prs = applySort(applyFilters(basePRs, { repo, author }), sort, dir)
     return h.view('your-tab', buildViewContext(data, prs, prs, { repo, author, sort, dir, groupBy }, '/your-tab', 'Title', 'Description'))
   },
@@ -114,13 +116,15 @@ Inside `<nav class="app-nav">`:
 
 Badge colour options: `app-badge--blue`, `app-badge--yellow`, `app-badge--red`.
 
-### 5. Badge count — `src/routes/helpers.js`
+### 5. Tab rule — `src/services/pr-filters.js`
 
-Add to `buildNavCounts()`:
+Add to `TAB_FILTERS`:
 
 ```js
-yourTab: nonBotPRs.filter((pr) => /* same filter as route */).length,
+yourTab: (pr, teamMembers) => isHuman(pr) && !pr.draft && /* your rule */,
 ```
+
+The route reads this rule through `filterPRsForTab(data, 'yourTab')`. `buildNavCounts()` counts every key in `TAB_FILTERS`, so `navCounts.yourTab` always matches the page.
 
 ### 6. Tests — `test/routes/your-tab.test.js`
 
