@@ -100,8 +100,8 @@ export async function warmPrCache() {
 
   const { org, team } = config
   const [teamMembers, repos] = await Promise.all([
-    fetchAllPages(`/orgs/${org}/teams/${team}/members`, githubToken),
-    fetchAllPages(`/orgs/${org}/teams/${team}/repos`, githubToken),
+    fetchAllPages(`/orgs/${org}/teams/${team}/members?per_page=100`, githubToken),
+    fetchAllPages(`/orgs/${org}/teams/${team}/repos?per_page=100`, githubToken),
   ])
 
   const teamMembersSet = new Set(teamMembers.map((m) => m.login))
@@ -128,22 +128,32 @@ export async function warmPrCache() {
 
   const rawPRs = prsByRepo.filter((r) => r !== null).flat()
 
+  // A failed PR keeps its previous entry, so that the rest of the warm still completes.
+  // A PR with no previous entry is dropped until the next warm; it has often just closed.
+  const previous = new Map((cache.get()?.prs ?? []).map((pr) => [`${pr.repo}#${pr.number}`, pr]))
+
   // Fetch reviews + commits per PR, capped at 10 concurrent
-  const prs = await runWithConcurrency(
+  const results = await runWithConcurrency(
     rawPRs,
     async (rawPR) => {
       const repoName = rawPR.base.repo.name
-      const [reviews, commits, ciStatus, prDetail] = await Promise.all([
-        fetchAllPages(`/repos/${org}/${repoName}/pulls/${rawPR.number}/reviews?per_page=100`, githubToken),
-        fetchAllPages(`/repos/${org}/${repoName}/pulls/${rawPR.number}/commits?per_page=100`, githubToken),
-        fetchCheckRuns(org, repoName, rawPR.head.sha, githubToken),
-        fetchWithRetry(`/repos/${org}/${repoName}/pulls/${rawPR.number}`, githubToken),
-      ])
-      const enrichedPR = prDetail ? { ...rawPR, additions: prDetail.additions, deletions: prDetail.deletions } : rawPR
-      return { ...formatPR(enrichedPR, reviews ?? [], commits ?? []), ciStatus }
+      try {
+        const [reviews, commits, ciStatus, prDetail] = await Promise.all([
+          fetchAllPages(`/repos/${org}/${repoName}/pulls/${rawPR.number}/reviews?per_page=100`, githubToken),
+          fetchAllPages(`/repos/${org}/${repoName}/pulls/${rawPR.number}/commits?per_page=100`, githubToken),
+          fetchCheckRuns(org, repoName, rawPR.head.sha, githubToken),
+          fetchWithRetry(`/repos/${org}/${repoName}/pulls/${rawPR.number}`, githubToken),
+        ])
+        const enrichedPR = prDetail ? { ...rawPR, additions: prDetail.additions, deletions: prDetail.deletions } : rawPR
+        return { ...formatPR(enrichedPR, reviews ?? [], commits ?? []), ciStatus }
+      } catch (err) {
+        console.error(`Failed to fetch details for ${repoName}#${rawPR.number}:`, err.message)
+        return previous.get(`${repoName}#${rawPR.number}`) ?? null
+      }
     },
     10
   )
+  const prs = results.filter((pr) => pr !== null)
 
   const data = { fetchedAt: new Date(), teamMembers: teamMembersSet, prs }
   cache.set(data)

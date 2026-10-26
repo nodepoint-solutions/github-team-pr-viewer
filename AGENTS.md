@@ -16,7 +16,7 @@ Self-hosted GitHub team PR dashboard. Pulls data from the GitHub REST API, cache
 src/
   routes/       # One file per tab/page — handler + filter logic
   services/
-    github.js   # Low-level API client (pagination, retries, rate limit backoff)
+    github.js   # Octokit client (pagination, retries, rate limits, ETag cache)
     prs.js      # Cache warming, PR formatting
     pr-filters.js # One rule per tab, shared by pages, nav badges and Slack
     cache.js    # Singleton in-memory PR store
@@ -167,9 +167,13 @@ Key: `jest.unstable_mockModule()` must appear before any `import` of the module 
 |---|---|
 | `fetchAllPages(path, token)` | Paginated list endpoints (members, repos, PRs, reviews) |
 | `fetchFile(path, token)` | Single file content (base64-decoded, null on 404) |
-| `fetchWithRetry(path, token)` | Single endpoint with backoff (check runs) |
+| `fetchWithRetry(path, token)` | Single endpoint (PR detail, check runs) |
 
-All functions retry on 429/403 using `retry-after` or `x-ratelimit-reset` headers, with exponential backoff up to 60s.
+The client is Octokit with the throttling, retry and paginate plugins:
+
+- **Rate limits:** the throttling plugin waits for `retry-after` or `x-ratelimit-reset` and retries up to twice. While it waits, all queued requests pause too. Other 403s are permission errors and fail at once.
+- **Concurrency:** at most 10 requests in flight across the whole app.
+- **ETag cache:** every GET sends `If-None-Match` with the last ETag for that URL and reuses the stored response on a 304. A 304 does not count against the primary rate limit. The cache holds up to 5000 URLs in memory and is empty after a restart.
 
 ### Token scopes required per feature
 
@@ -187,7 +191,9 @@ If `security_events` is missing, the Security tab shows nothing and logs a warni
 3. Per PR (max 10 concurrent): fetch reviews + commits + check runs
 4. Format and store in cache singleton
 
-Individual repo failures are tolerated. If all repos fail, old cache is preserved.
+Individual repo failures are tolerated. If all repos fail, old cache is preserved. If one PR's details fail, it keeps its previous entry, or is left out until the next warm if it has none.
+
+The scheduler retries the PR warm and the dependency warm separately, up to 3 times each.
 
 ---
 

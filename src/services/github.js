@@ -1,86 +1,106 @@
-const BASE_URL = 'https://api.github.com'
+import { Octokit } from '@octokit/core'
+import { paginateRest } from '@octokit/plugin-paginate-rest'
+import { retry } from '@octokit/plugin-retry'
+import { throttling } from '@octokit/plugin-throttling'
 
-const HEADERS = (token) => ({
-  Authorization: `Bearer ${token}`,
-  Accept: 'application/vnd.github+json',
-  'X-GitHub-Api-Version': '2022-11-28',
-})
+const MAX_RATE_LIMIT_RETRIES = 2
+const MAX_ETAG_ENTRIES = 5000
 
-export function getNextPage(linkHeader) {
-  if (!linkHeader) return null
-  const match = linkHeader.match(/<([^>]+)>;\s*rel="next"/)
-  return match ? match[1] : null
-}
+const GitHub = Octokit.plugin(throttling, retry, paginateRest)
 
-export async function fetchAllPages(path, token, retries = 3, initialDelay = 1000) {
-  const results = []
-  let url = `${BASE_URL}${path}`
+// url -> last 200 response. A 304 reply does not count against the primary rate limit,
+// so unchanged data costs nothing. Insertion order doubles as LRU order.
+const etagCache = new Map()
 
-  while (url) {
-    let res
-    for (let attempt = 0; attempt <= retries; attempt++) {
-      res = await fetch(url, { headers: HEADERS(token) })
+// Shared across all requests, so that one rate-limited response holds back every queued request
+// and GitHub's penalty window can expire.
+let pausedUntil = 0
 
-      if (res.status === 429 || res.status === 403) {
-        const body = await res.json().catch(() => ({}))
-        const resetAt = res.headers.get('x-ratelimit-reset')
-        const retryAfter = res.headers.get('retry-after')
-        const delay = retryAfter
-          ? parseInt(retryAfter, 10) * 1000
-          : resetAt
-            ? Math.max(0, parseInt(resetAt, 10) * 1000 - Date.now()) + 1000
-            : initialDelay * Math.pow(2, attempt)
-
-        if (attempt === retries) {
-          throw new Error(`GitHub API ${res.status} on ${path}: ${body.message ?? 'rate limited'}`)
-        }
-        console.warn(`GitHub API ${res.status} on ${path} — retrying in ${Math.round(delay / 1000)}s (attempt ${attempt + 1}/${retries}): ${body.message ?? ''}`)
-        await sleep(delay)
-        continue
-      }
-
-      break
-    }
-
-    if (!res.ok) {
-      const body = await res.json().catch(() => ({}))
-      throw new Error(`GitHub API error ${res.status} on ${path}: ${body.message ?? res.statusText}`)
-    }
-
-    const data = await res.json()
-    results.push(...data)
-    url = getNextPage(res.headers.get('link'))
-  }
-
-  return results
-}
-
-export async function fetchFile(path, token) {
-  const res = await fetch(`${BASE_URL}${path}`, { headers: HEADERS(token) })
-  if (res.status === 404) return null
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}))
-    throw new Error(`GitHub API error ${res.status} on ${path}: ${body.message ?? res.statusText}`)
-  }
-  const data = await res.json()
-  return Buffer.from(data.content, 'base64').toString('utf-8')
-}
+const clients = new Map()
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 
-export async function fetchWithRetry(path, token, retries = 3, initialDelay = 1000) {
-  for (let attempt = 0; attempt <= retries; attempt++) {
-    const res = await fetch(`${BASE_URL}${path}`, { headers: HEADERS(token) })
+export function resetGithubClient() {
+  etagCache.clear()
+  clients.clear()
+  pausedUntil = 0
+}
 
-    if (res.status === 429 || res.status === 403) {
-      if (attempt === retries) throw new Error(`Rate limited after ${retries} retries: ${path}`)
-      await sleep(initialDelay * Math.pow(2, attempt))
-      continue
-    }
+function remember(url, response) {
+  etagCache.delete(url)
+  etagCache.set(url, response)
+  if (etagCache.size > MAX_ETAG_ENTRIES) etagCache.delete(etagCache.keys().next().value)
+}
 
-    if (!res.ok) throw new Error(`GitHub API error: ${res.status} ${path}`)
-    return res.json()
+function onLimit(kind) {
+  return (retryAfter, options, octokit, retryCount) => {
+    pausedUntil = Math.max(pausedUntil, Date.now() + retryAfter * 1000)
+    console.warn(`GitHub ${kind} on ${options.method} ${options.url} — pausing for ${retryAfter}s (attempt ${retryCount + 1}/${MAX_RATE_LIMIT_RETRIES})`)
+    return retryCount < MAX_RATE_LIMIT_RETRIES
   }
+}
+
+function client(token) {
+  if (clients.has(token)) return clients.get(token)
+
+  const octokit = new GitHub({
+    auth: token,
+    userAgent: 'github-team-pr-viewer',
+    // The gate sits at the fetch call, inside the throttling queue, so that it also holds requests
+    // that were queued before the limit was hit
+    request: {
+      fetch: async (url, init) => {
+        const wait = pausedUntil - Date.now()
+        if (wait > 0) await sleep(wait)
+        return globalThis.fetch(url, init)
+      },
+    },
+    throttle: { onRateLimit: onLimit('rate limit'), onSecondaryRateLimit: onLimit('secondary rate limit') },
+    // The throttling plugin owns 429s, so that a rate limit is retried once rather than by both plugins
+    retry: { doNotRetry: [400, 401, 403, 404, 410, 422, 429, 451] },
+  })
+
+  octokit.hook.wrap('request', async (request, options) => {
+    options.headers = { ...options.headers, 'x-github-api-version': '2022-11-28' }
+    const { url } = octokit.request.endpoint(options)
+    // Read before the request, so that a 304 always has the body it was validated against
+    const cached = options.method === 'GET' ? etagCache.get(url) : undefined
+    if (cached) options.headers['if-none-match'] = cached.headers.etag
+
+    try {
+      const response = await request(options)
+      if (options.method === 'GET' && response.headers.etag) remember(url, response)
+      return response
+    } catch (err) {
+      if (err.status === 304 && cached) {
+        remember(url, cached)
+        return cached
+      }
+      throw err
+    }
+  })
+
+  clients.set(token, octokit)
+  return octokit
+}
+
+export async function fetchAllPages(path, token) {
+  return client(token).paginate(`GET ${path}`)
+}
+
+export async function fetchFile(path, token) {
+  try {
+    const { data } = await client(token).request(`GET ${path}`)
+    return Buffer.from(data.content, 'base64').toString('utf-8')
+  } catch (err) {
+    if (err.status === 404) return null
+    throw err
+  }
+}
+
+export async function fetchWithRetry(path, token) {
+  const { data } = await client(token).request(`GET ${path}`)
+  return data
 }
 
 export function aggregateCheckStatus(checkRuns) {

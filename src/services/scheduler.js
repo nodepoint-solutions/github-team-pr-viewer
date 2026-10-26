@@ -2,8 +2,26 @@ import { warmPrCache } from './prs.js'
 import { warmDependencyCache } from './dependencies/index.js'
 import { config } from '../config.js'
 
-const MAX_ATTEMPTS = 8
+// Request-level retries and rate-limit waits sit in the GitHub client, so this only covers
+// failures of a whole warm, such as the team lookup failing
+const MAX_ATTEMPTS = 3
 const DAY_NAMES = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 }
+
+async function withRetry(name, warmFn) {
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    try {
+      return await warmFn()
+    } catch (err) {
+      if (attempt === MAX_ATTEMPTS) {
+        console.error(`${name} cache warm failed after ${MAX_ATTEMPTS} attempts:`, err.message)
+        return
+      }
+      const delayMs = 1000 * Math.pow(4, attempt)
+      console.error(`${name} cache warm attempt ${attempt} failed, retrying in ${delayMs / 1000}s:`, err.message)
+      await new Promise((resolve) => setTimeout(resolve, delayMs))
+    }
+  }
+}
 
 export function startScheduler({ skipInitial = false } = {}) {
   let running = false
@@ -12,20 +30,8 @@ export function startScheduler({ skipInitial = false } = {}) {
     if (running) return
     running = true
     try {
-      for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
-        try {
-          await Promise.all([warmPrCache(), warmDependencyCache()])
-          break
-        } catch (err) {
-          if (attempt === MAX_ATTEMPTS) {
-            console.error(`Cache warm failed after ${MAX_ATTEMPTS} attempts:`, err.message)
-            break
-          }
-          const delayMs = Math.min(1000 * Math.pow(2, attempt - 1), 60_000)
-          console.error(`Cache warm attempt ${attempt} failed, retrying in ${delayMs / 1000}s:`, err.message)
-          await new Promise((resolve) => setTimeout(resolve, delayMs))
-        }
-      }
+      // Each cache retries on its own, so that a retry fetches only the cache that failed
+      await Promise.all([withRetry('PR', warmPrCache), withRetry('Dependency', warmDependencyCache)])
     } finally {
       running = false
     }

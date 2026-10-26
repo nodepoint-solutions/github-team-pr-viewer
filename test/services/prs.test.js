@@ -1,11 +1,20 @@
-import { describe, it, expect, jest } from '@jest/globals'
+import { describe, it, expect, jest, beforeEach } from '@jest/globals'
 
 // config.js throws at import time if GITHUB_TOKEN is absent — mock it first
 jest.unstable_mockModule('../../src/config.js', () => ({
-  config: { port: 3000, githubToken: 'test', cacheTtlMs: 300000, isDevelopment: false, jiraEnabled: true, jiraTicketPattern: 'DF-\\d+' },
+  config: { port: 3000, githubToken: 'test', cacheTtlMs: 300000, isDevelopment: false, jiraEnabled: true, jiraTicketPattern: 'DF-\\d+', org: 'test-org', team: 'test-team', requiredTeamRole: 'admin' },
 }))
 
-const { isBot, isMergeCommit, formatPR, runWithConcurrency, extractJiraTicket } = await import('../../src/services/prs.js')
+const mockFetchAllPages = jest.fn()
+const mockFetchWithRetry = jest.fn()
+jest.unstable_mockModule('../../src/services/github.js', () => ({
+  fetchAllPages: mockFetchAllPages,
+  fetchWithRetry: mockFetchWithRetry,
+  fetchCheckRuns: jest.fn().mockResolvedValue('passing'),
+}))
+
+const cache = await import('../../src/services/cache.js')
+const { isBot, isMergeCommit, formatPR, runWithConcurrency, extractJiraTicket, warmPrCache } = await import('../../src/services/prs.js')
 
 describe('isBot', () => {
   it('returns true for user.type === Bot', () => {
@@ -179,5 +188,46 @@ describe('extractJiraTicket', () => {
   })
   it('handles missing body and head gracefully', () => {
     expect(extractJiraTicket({ title: 'DF-999 test' })).toBe('DF-999')
+  })
+})
+
+describe('warmPrCache', () => {
+  const rawPR = (number) => ({
+    number,
+    title: `PR ${number}`,
+    html_url: `https://github.com/test-org/api/pull/${number}`,
+    base: { repo: { name: 'api' } },
+    head: { sha: `sha${number}`, ref: 'main' },
+    user: { login: 'alice', type: 'User' },
+    created_at: '2026-01-01T00:00:00Z',
+    updated_at: '2026-01-01T00:00:00Z',
+    draft: false,
+  })
+
+  beforeEach(() => {
+    cache.clear()
+    mockFetchAllPages.mockReset()
+    mockFetchWithRetry.mockReset()
+    mockFetchAllPages.mockImplementation(async (path) => {
+      if (path.includes('/members')) return [{ login: 'alice' }]
+      if (path.includes('/teams/test-team/repos')) return [{ name: 'api', permissions: { admin: true } }]
+      if (path.endsWith('/pulls?state=open&per_page=100')) return [rawPR(1), rawPR(2)]
+      if (path.includes('/pulls/2/reviews')) throw new Error('GitHub API error 500')
+      return []
+    })
+    mockFetchWithRetry.mockResolvedValue({ additions: 1, deletions: 1 })
+  })
+
+  it('drops a PR whose details fail when it has no previous entry', async () => {
+    const data = await warmPrCache()
+    expect(data.prs.map((pr) => pr.number)).toEqual([1])
+  })
+
+  it('keeps the previous entry of a PR whose details fail', async () => {
+    const previousPR = { ...formatPR(rawPR(2), [], []), title: 'previous', ciStatus: 'failing' }
+    cache.set({ fetchedAt: new Date(), teamMembers: new Set(), prs: [previousPR] })
+
+    const data = await warmPrCache()
+    expect(data.prs.map((pr) => [pr.number, pr.title])).toEqual([[1, 'PR 1'], [2, 'previous']])
   })
 })

@@ -1,28 +1,22 @@
 import { describe, it, expect, beforeEach, afterEach, jest } from '@jest/globals'
-import { getNextPage, fetchAllPages, fetchWithRetry, fetchFile, aggregateCheckStatus, fetchCheckRuns } from '../../src/services/github.js'
+import { fetchAllPages, fetchWithRetry, fetchFile, aggregateCheckStatus, fetchCheckRuns, resetGithubClient } from '../../src/services/github.js'
 
 const TOKEN = 'test-token'
 
-describe('getNextPage', () => {
-  it('returns null when link header is absent', () => {
-    expect(getNextPage(null)).toBeNull()
+function jsonResponse(body, { status = 200, headers = {} } = {}) {
+  return new Response(status === 304 ? null : JSON.stringify(body), {
+    status,
+    headers: { 'content-type': 'application/json', ...headers },
   })
+}
 
-  it('returns null when there is no next rel', () => {
-    const header = '<https://api.github.com/items?page=1>; rel="prev"'
-    expect(getNextPage(header)).toBeNull()
-  })
+const sentHeader = (call, name) => call[1].headers[name]
 
-  it('returns the next URL from a link header', () => {
-    const header = '<https://api.github.com/items?page=2>; rel="next", <https://api.github.com/items?page=5>; rel="last"'
-    expect(getNextPage(header)).toBe('https://api.github.com/items?page=2')
-  })
-})
-
-describe('fetchAllPages', () => {
+describe('github client', () => {
   let mockFetch
 
   beforeEach(() => {
+    resetGithubClient()
     mockFetch = jest.fn()
     global.fetch = mockFetch
   })
@@ -31,121 +25,87 @@ describe('fetchAllPages', () => {
     delete global.fetch
   })
 
-  it('returns items from a single page response', async () => {
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: async () => [{ id: 1 }, { id: 2 }],
-      headers: { get: () => null },
+  describe('fetchAllPages', () => {
+    it('reuses every cached page, including its next link, when GitHub replies 304', async () => {
+      mockFetch
+        .mockResolvedValueOnce(jsonResponse([{ id: 1 }], { headers: { etag: '"p1"', link: '<https://api.github.com/test?page=2>; rel="next"' } }))
+        .mockResolvedValueOnce(jsonResponse([{ id: 2 }], { headers: { etag: '"p2"' } }))
+        .mockResolvedValueOnce(jsonResponse(null, { status: 304 }))
+        .mockResolvedValueOnce(jsonResponse(null, { status: 304 }))
+      await fetchAllPages('/test', TOKEN)
+
+      const result = await fetchAllPages('/test', TOKEN)
+      expect(result).toEqual([{ id: 1 }, { id: 2 }])
+      expect(sentHeader(mockFetch.mock.calls[2], 'if-none-match')).toBe('"p1"')
+      expect(mockFetch.mock.calls[3][0]).toBe('https://api.github.com/test?page=2')
+      expect(sentHeader(mockFetch.mock.calls[3], 'if-none-match')).toBe('"p2"')
     })
-    const result = await fetchAllPages('/test', TOKEN)
-    expect(result).toEqual([{ id: 1 }, { id: 2 }])
-  })
 
-  it('follows pagination and concatenates results', async () => {
-    mockFetch
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => [{ id: 1 }],
-        headers: { get: () => '<https://api.github.com/test?page=2>; rel="next"' },
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => [{ id: 2 }],
-        headers: { get: () => null },
-      })
-    const result = await fetchAllPages('/test', TOKEN)
-    expect(result).toEqual([{ id: 1 }, { id: 2 }])
-    expect(mockFetch).toHaveBeenCalledTimes(2)
-  })
-
-  it('throws on non-ok response', async () => {
-    mockFetch.mockResolvedValueOnce({
-      ok: false,
-      status: 404,
-      statusText: 'Not Found',
-      json: async () => ({ message: 'Not Found' }),
-      headers: { get: () => null },
+    it('does not retry a permission 403', async () => {
+      mockFetch.mockResolvedValue(jsonResponse({ message: 'Resource not accessible by integration' }, { status: 403 }))
+      await expect(fetchAllPages('/repos/org/repo/dependabot/alerts', TOKEN)).rejects.toMatchObject({ status: 403 })
+      expect(mockFetch).toHaveBeenCalledTimes(1)
     })
-    await expect(fetchAllPages('/missing', TOKEN)).rejects.toThrow('GitHub API error 404')
-  })
-})
-
-describe('fetchWithRetry', () => {
-  let mockFetch
-
-  beforeEach(() => {
-    mockFetch = jest.fn()
-    global.fetch = mockFetch
   })
 
-  afterEach(() => {
-    delete global.fetch
-  })
-
-  it('returns JSON on success', async () => {
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      status: 200,
-      json: async () => [{ id: 1 }],
+  describe('fetchWithRetry', () => {
+    it('sends no if-none-match on the first request', async () => {
+      mockFetch.mockResolvedValueOnce(jsonResponse({ id: 1 }, { headers: { etag: '"v1"' } }))
+      await fetchWithRetry('/test', TOKEN)
+      expect(sentHeader(mockFetch.mock.calls[0], 'if-none-match')).toBeUndefined()
+      expect(sentHeader(mockFetch.mock.calls[0], 'x-github-api-version')).toBe('2022-11-28')
     })
-    const result = await fetchWithRetry('/test', TOKEN)
-    expect(result).toEqual([{ id: 1 }])
-  })
 
-  it('retries on 429 and succeeds on second attempt', async () => {
-    mockFetch
-      .mockResolvedValueOnce({ ok: false, status: 429, json: async () => ({}) })
-      .mockResolvedValueOnce({ ok: true, status: 200, json: async () => [{ id: 1 }] })
+    it('sends the stored etag and returns the cached body on 304', async () => {
+      mockFetch
+        .mockResolvedValueOnce(jsonResponse({ id: 1 }, { headers: { etag: '"v1"' } }))
+        .mockResolvedValueOnce(jsonResponse(null, { status: 304 }))
+      await fetchWithRetry('/test', TOKEN)
 
-    const result = await fetchWithRetry('/test', TOKEN, 3, 0)
-    expect(result).toEqual([{ id: 1 }])
-    expect(mockFetch).toHaveBeenCalledTimes(2)
-  })
-
-  it('throws after max retries', async () => {
-    mockFetch.mockResolvedValue({ ok: false, status: 429 })
-    await expect(fetchWithRetry('/test', TOKEN, 2, 0)).rejects.toThrow('Rate limited')
-  })
-})
-
-describe('fetchFile', () => {
-  let mockFetch
-
-  beforeEach(() => {
-    mockFetch = jest.fn()
-    global.fetch = mockFetch
-  })
-
-  afterEach(() => {
-    delete global.fetch
-  })
-
-  it('returns decoded file content when the file exists', async () => {
-    const content = 'hello world'
-    const encoded = Buffer.from(content).toString('base64')
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      status: 200,
-      json: async () => ({ content: encoded }),
+      const result = await fetchWithRetry('/test', TOKEN)
+      expect(result).toEqual({ id: 1 })
+      expect(sentHeader(mockFetch.mock.calls[1], 'if-none-match')).toBe('"v1"')
     })
-    const result = await fetchFile('/repos/org/repo/contents/package.json', 'token')
-    expect(result).toBe('hello world')
-  })
 
-  it('returns null when the file does not exist (404)', async () => {
-    mockFetch.mockResolvedValueOnce({ ok: false, status: 404 })
-    const result = await fetchFile('/repos/org/repo/contents/package.json', 'token')
-    expect(result).toBeNull()
-  })
+    it('replaces the cached body when GitHub returns new data', async () => {
+      mockFetch
+        .mockResolvedValueOnce(jsonResponse({ id: 1 }, { headers: { etag: '"v1"' } }))
+        .mockResolvedValueOnce(jsonResponse({ id: 2 }, { headers: { etag: '"v2"' } }))
+        .mockResolvedValueOnce(jsonResponse(null, { status: 304 }))
+      await fetchWithRetry('/test', TOKEN)
+      expect(await fetchWithRetry('/test', TOKEN)).toEqual({ id: 2 })
 
-  it('throws on non-404 error responses', async () => {
-    mockFetch.mockResolvedValueOnce({
-      ok: false,
-      status: 500,
-      statusText: 'Internal Server Error',
-      json: async () => ({ message: 'Server error' }),
+      expect(await fetchWithRetry('/test', TOKEN)).toEqual({ id: 2 })
+      expect(sentHeader(mockFetch.mock.calls[2], 'if-none-match')).toBe('"v2"')
     })
-    await expect(fetchFile('/repos/org/repo/contents/package.json', 'token')).rejects.toThrow('GitHub API error 500')
+
+    it('keeps etags separate per query string', async () => {
+      mockFetch
+        .mockResolvedValueOnce(jsonResponse({ state: 'open' }, { headers: { etag: '"open"' } }))
+        .mockResolvedValueOnce(jsonResponse({ state: 'closed' }))
+      await fetchWithRetry('/test?state=open', TOKEN)
+      await fetchWithRetry('/test?state=closed', TOKEN)
+      expect(sentHeader(mockFetch.mock.calls[1], 'if-none-match')).toBeUndefined()
+    })
+  })
+
+  describe('fetchFile', () => {
+    it('returns decoded file content when the file exists', async () => {
+      mockFetch.mockResolvedValueOnce(jsonResponse({ content: Buffer.from('hello world').toString('base64') }))
+      const result = await fetchFile('/repos/org/repo/contents/package.json', TOKEN)
+      expect(result).toBe('hello world')
+    })
+
+    it('returns null when the file does not exist (404)', async () => {
+      mockFetch.mockResolvedValueOnce(jsonResponse({ message: 'Not Found' }, { status: 404 }))
+      const result = await fetchFile('/repos/org/repo/contents/package.json', TOKEN)
+      expect(result).toBeNull()
+    })
+
+    it('throws on non-404 error responses', async () => {
+      mockFetch.mockResolvedValue(jsonResponse({ message: 'Bad credentials' }, { status: 401 }))
+      await expect(fetchFile('/repos/org/repo/contents/package.json', TOKEN)).rejects.toMatchObject({ status: 401 })
+    })
   })
 })
 
@@ -211,6 +171,7 @@ describe('fetchCheckRuns', () => {
   let mockFetch
 
   beforeEach(() => {
+    resetGithubClient()
     mockFetch = jest.fn()
     global.fetch = mockFetch
   })
@@ -220,53 +181,37 @@ describe('fetchCheckRuns', () => {
   })
 
   it('returns passing when all checks succeed', async () => {
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      status: 200,
-      json: async () => ({
-        check_runs: [
-          { status: 'completed', conclusion: 'success' },
-          { status: 'completed', conclusion: 'skipped' },
-        ],
-      }),
-    })
+    mockFetch.mockResolvedValueOnce(jsonResponse({
+      check_runs: [
+        { status: 'completed', conclusion: 'success' },
+        { status: 'completed', conclusion: 'skipped' },
+      ],
+    }))
     const result = await fetchCheckRuns('org', 'repo', 'sha123', 'TOKEN')
     expect(result).toBe('passing')
   })
 
   it('returns failing when any check has failure conclusion', async () => {
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      status: 200,
-      json: async () => ({
-        check_runs: [
-          { status: 'completed', conclusion: 'success' },
-          { status: 'completed', conclusion: 'failure' },
-        ],
-      }),
-    })
+    mockFetch.mockResolvedValueOnce(jsonResponse({
+      check_runs: [
+        { status: 'completed', conclusion: 'success' },
+        { status: 'completed', conclusion: 'failure' },
+      ],
+    }))
     const result = await fetchCheckRuns('org', 'repo', 'sha123', 'TOKEN')
     expect(result).toBe('failing')
   })
 
   it('returns pending when a check is in_progress', async () => {
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      status: 200,
-      json: async () => ({
-        check_runs: [{ status: 'in_progress', conclusion: null }],
-      }),
-    })
+    mockFetch.mockResolvedValueOnce(jsonResponse({
+      check_runs: [{ status: 'in_progress', conclusion: null }],
+    }))
     const result = await fetchCheckRuns('org', 'repo', 'sha123', 'TOKEN')
     expect(result).toBe('pending')
   })
 
   it('returns unknown when there are no check runs', async () => {
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      status: 200,
-      json: async () => ({ check_runs: [] }),
-    })
+    mockFetch.mockResolvedValueOnce(jsonResponse({ check_runs: [] }))
     const result = await fetchCheckRuns('org', 'repo', 'sha123', 'TOKEN')
     expect(result).toBe('unknown')
   })

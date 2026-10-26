@@ -54,6 +54,17 @@ describe('startScheduler', () => {
     stop()
   })
 
+  it('retries a failed PR warm without warming dependencies again', async () => {
+    mockWarmPrCache.mockRejectedValueOnce(new Error('team lookup failed'))
+    jest.spyOn(console, 'error').mockImplementation(() => {})
+    const stop = startScheduler()
+    await jest.advanceTimersByTimeAsync(4000)
+    expect(mockWarmPrCache).toHaveBeenCalledTimes(2)
+    expect(mockWarmDependencyCache).toHaveBeenCalledTimes(1)
+    console.error.mockRestore()
+    stop()
+  })
+
   it('returned function stops the interval', async () => {
     const stop = startScheduler({ skipInitial: true })
     stop()
