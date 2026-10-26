@@ -171,8 +171,8 @@ Key: `jest.unstable_mockModule()` must appear before any `import` of the module 
 
 The client is Octokit with the throttling, retry and paginate plugins:
 
-- **Rate limits:** the throttling plugin waits for `retry-after` or `x-ratelimit-reset` and retries up to twice. While it waits, all queued requests pause too. Other 403s are permission errors and fail at once.
-- **Concurrency:** at most 10 requests in flight across the whole app.
+- **Rate limits:** the throttling plugin waits for `retry-after` or `x-ratelimit-reset` and retries up to twice. While it waits, all queued requests pause too. If the limit resets more than 5 minutes later, every request fails at once until the reset, and the next scheduled warm fetches again. Other 403s are permission errors and fail at once.
+- **Concurrency:** at most 10 new requests in flight across the whole app. Retried requests go past this limit.
 - **ETag cache:** every GET sends `If-None-Match` with the last ETag for that URL and reuses the stored response on a 304. A 304 does not count against the primary rate limit. The cache holds up to 5000 URLs in memory and is empty after a restart.
 
 ### Token scopes required per feature
@@ -188,10 +188,10 @@ If `security_events` is missing, the Security tab shows nothing and logs a warni
 
 1. Fetch team members → fetch team repos → filter non-archived + required role (`REQUIRED_TEAM_ROLE`, default `admin`)
 2. Per repo: fetch open PRs
-3. Per PR (max 10 concurrent): fetch reviews + commits + check runs
+3. Per PR: fetch reviews + commits + check runs + PR detail (the client limits concurrency)
 4. Format and store in cache singleton
 
-Individual repo failures are tolerated. If all repos fail, old cache is preserved. If one PR's details fail, it keeps its previous entry, or is left out until the next warm if it has none.
+Individual repo failures are tolerated. If all repos fail, old cache is preserved. If one PR's details fail, it is rebuilt from the fresh PR list entry and its previous details. It is left out if it has no previous entry, or if GitHub returns 404. A PR that closed after the list call is left out. If all PR details fail, old cache is preserved.
 
 The scheduler retries the PR warm and the dependency warm separately, up to 3 times each.
 

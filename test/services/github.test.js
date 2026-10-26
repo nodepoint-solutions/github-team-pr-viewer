@@ -48,6 +48,51 @@ describe('github client', () => {
     })
   })
 
+  describe('rate limits', () => {
+    beforeEach(() => {
+      jest.spyOn(console, 'warn').mockImplementation(() => {})
+    })
+
+    afterEach(() => {
+      console.warn.mockRestore()
+    })
+
+    it('retries after a short secondary rate limit', async () => {
+      mockFetch
+        .mockResolvedValueOnce(jsonResponse({ message: 'secondary rate limit' }, { status: 429, headers: { 'retry-after': '1' } }))
+        .mockResolvedValueOnce(jsonResponse({ id: 1 }))
+      await expect(fetchWithRetry('/test', TOKEN)).resolves.toEqual({ id: 1 })
+      expect(mockFetch).toHaveBeenCalledTimes(2)
+    })
+
+    it('fails at once, and blocks later requests, when the limit resets after the maximum wait', async () => {
+      const reset = Math.floor(Date.now() / 1000) + 3600
+      mockFetch.mockResolvedValueOnce(jsonResponse({ message: 'API rate limit exceeded' }, {
+        status: 403,
+        headers: { 'x-ratelimit-remaining': '0', 'x-ratelimit-reset': String(reset) },
+      }))
+      await expect(fetchWithRetry('/test', TOKEN)).rejects.toMatchObject({ status: 403 })
+      await expect(fetchWithRetry('/other', TOKEN)).rejects.toThrow('requests blocked until')
+      expect(mockFetch).toHaveBeenCalledTimes(1)
+    })
+
+    it('sends no request queued behind a limit that resets after the maximum wait', async () => {
+      const reset = Math.floor(Date.now() / 1000) + 3600
+      mockFetch.mockResolvedValueOnce(jsonResponse({ message: 'API rate limit exceeded' }, {
+        status: 403,
+        headers: { 'x-ratelimit-remaining': '0', 'x-ratelimit-reset': String(reset) },
+      }))
+      mockFetch.mockImplementation(async () => jsonResponse({ id: 1 }))
+      const paths = Array.from({ length: 30 }, (_, i) => `/test/${i}`)
+      const results = await Promise.allSettled(paths.map((path) => fetchWithRetry(path, TOKEN)))
+
+      const sent = mockFetch.mock.calls.length
+      const blocked = results.filter((r) => r.status === 'rejected' && r.reason.message.includes('requests blocked until'))
+      expect(sent + blocked.length).toBe(30)
+      expect(sent).toBeLessThanOrEqual(10)
+    })
+  })
+
   describe('fetchWithRetry', () => {
     it('sends no if-none-match on the first request', async () => {
       mockFetch.mockResolvedValueOnce(jsonResponse({ id: 1 }, { headers: { etag: '"v1"' } }))

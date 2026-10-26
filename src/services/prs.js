@@ -76,16 +76,6 @@ export function formatPR(rawPR, rawReviews, rawCommits) {
   }
 }
 
-export async function runWithConcurrency(items, fn, concurrency) {
-  const results = []
-  for (let i = 0; i < items.length; i += concurrency) {
-    const batch = items.slice(i, i + concurrency)
-    const batchResults = await Promise.all(batch.map(fn))
-    results.push(...batchResults)
-  }
-  return results
-}
-
 const EMPTY_DATA = { fetchedAt: null, teamMembers: new Set(), prs: [] }
 
 // Read-only cache access — never triggers API calls.
@@ -128,14 +118,16 @@ export async function warmPrCache() {
 
   const rawPRs = prsByRepo.filter((r) => r !== null).flat()
 
-  // A failed PR keeps its previous entry, so that the rest of the warm still completes.
-  // A PR with no previous entry is dropped until the next warm; it has often just closed.
+  // A failed PR is rebuilt from the fresh list entry plus its previous details, so that the rest of
+  // the warm still completes and fields such as draft and title stay current.
+  // A PR with no previous entry, or one whose detail returns 404 because the repo moved or access
+  // was lost, is dropped. A PR that closed after the list call is dropped on success too.
   const previous = new Map((cache.get()?.prs ?? []).map((pr) => [`${pr.repo}#${pr.number}`, pr]))
+  let failures = 0
 
-  // Fetch reviews + commits per PR, capped at 10 concurrent
-  const results = await runWithConcurrency(
-    rawPRs,
-    async (rawPR) => {
+  // The GitHub client caps requests in flight, so every PR starts at once and keeps that cap busy
+  const results = await Promise.all(
+    rawPRs.map(async (rawPR) => {
       const repoName = rawPR.base.repo.name
       try {
         const [reviews, commits, ciStatus, prDetail] = await Promise.all([
@@ -144,15 +136,25 @@ export async function warmPrCache() {
           fetchCheckRuns(org, repoName, rawPR.head.sha, githubToken),
           fetchWithRetry(`/repos/${org}/${repoName}/pulls/${rawPR.number}`, githubToken),
         ])
-        const enrichedPR = prDetail ? { ...rawPR, additions: prDetail.additions, deletions: prDetail.deletions } : rawPR
-        return { ...formatPR(enrichedPR, reviews ?? [], commits ?? []), ciStatus }
+        if (prDetail.state !== 'open') return null
+        const enrichedPR = { ...rawPR, additions: prDetail.additions, deletions: prDetail.deletions }
+        return { ...formatPR(enrichedPR, reviews, commits), ciStatus }
       } catch (err) {
+        failures++
         console.error(`Failed to fetch details for ${repoName}#${rawPR.number}:`, err.message)
-        return previous.get(`${repoName}#${rawPR.number}`) ?? null
+        const prev = previous.get(`${repoName}#${rawPR.number}`)
+        if (err.status === 404 || !prev) return null
+        const enrichedPR = { ...rawPR, additions: prev.additions, deletions: prev.deletions }
+        return { ...formatPR(enrichedPR, prev.reviews, prev.commits), ciStatus: prev.ciStatus }
       }
-    },
-    10
+    })
   )
+
+  // If every PR detail fetch failed, something is systemically wrong — preserve the old cache
+  if (rawPRs.length > 0 && failures === rawPRs.length) {
+    throw new Error('All PR detail fetches failed — preserving cached data')
+  }
+
   const prs = results.filter((pr) => pr !== null)
 
   const data = { fetchedAt: new Date(), teamMembers: teamMembersSet, prs }

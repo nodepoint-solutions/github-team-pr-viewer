@@ -14,7 +14,7 @@ jest.unstable_mockModule('../../src/services/github.js', () => ({
 }))
 
 const cache = await import('../../src/services/cache.js')
-const { isBot, isMergeCommit, formatPR, runWithConcurrency, extractJiraTicket, warmPrCache } = await import('../../src/services/prs.js')
+const { isBot, isMergeCommit, formatPR, extractJiraTicket, warmPrCache } = await import('../../src/services/prs.js')
 
 describe('isBot', () => {
   it('returns true for user.type === Bot', () => {
@@ -164,15 +164,6 @@ describe('formatPR', () => {
   })
 })
 
-describe('runWithConcurrency', () => {
-  it('runs all items and returns results', async () => {
-    const items = [1, 2, 3, 4, 5]
-    const fn = async (x) => x * 2
-    const results = await runWithConcurrency(items, fn, 2)
-    expect(results).toEqual([2, 4, 6, 8, 10])
-  })
-})
-
 describe('extractJiraTicket', () => {
   it('extracts DF- ticket from title', () => {
     expect(extractJiraTicket({ title: 'DF-123 fix the thing', body: null, head: { ref: 'main' } })).toBe('DF-123')
@@ -215,7 +206,7 @@ describe('warmPrCache', () => {
       if (path.includes('/pulls/2/reviews')) throw new Error('GitHub API error 500')
       return []
     })
-    mockFetchWithRetry.mockResolvedValue({ additions: 1, deletions: 1 })
+    mockFetchWithRetry.mockResolvedValue({ state: 'open', additions: 1, deletions: 1 })
   })
 
   it('drops a PR whose details fail when it has no previous entry', async () => {
@@ -223,11 +214,45 @@ describe('warmPrCache', () => {
     expect(data.prs.map((pr) => pr.number)).toEqual([1])
   })
 
-  it('keeps the previous entry of a PR whose details fail', async () => {
-    const previousPR = { ...formatPR(rawPR(2), [], []), title: 'previous', ciStatus: 'failing' }
+  it('rebuilds a PR whose details fail from its fresh list entry and previous details', async () => {
+    const review = { user: { login: 'bob', type: 'User' }, state: 'APPROVED', submitted_at: '2026-01-02T00:00:00Z' }
+    const previousPR = { ...formatPR({ ...rawPR(2), additions: 7, deletions: 3 }, [review], []), title: 'previous', draft: true, ciStatus: 'failing' }
     cache.set({ fetchedAt: new Date(), teamMembers: new Set(), prs: [previousPR] })
 
     const data = await warmPrCache()
-    expect(data.prs.map((pr) => [pr.number, pr.title])).toEqual([[1, 'PR 1'], [2, 'previous']])
+    const pr = data.prs.find((p) => p.number === 2)
+    expect(data.prs.map((p) => p.number)).toEqual([1, 2])
+    expect(pr).toMatchObject({ title: 'PR 2', draft: false, additions: 7, deletions: 3, reviewState: 'APPROVED', ciStatus: 'failing' })
+  })
+
+  it('drops a PR whose details return 404, even with a previous entry', async () => {
+    cache.set({ fetchedAt: new Date(), teamMembers: new Set(), prs: [formatPR(rawPR(2), [], [])] })
+    const listOnly = mockFetchAllPages.getMockImplementation()
+    mockFetchAllPages.mockImplementation(async (path) => (path.includes('/pulls/2/reviews') ? [] : listOnly(path)))
+    mockFetchWithRetry.mockImplementation(async (path) => {
+      if (path.endsWith('/pulls/2')) throw Object.assign(new Error('Not Found'), { status: 404 })
+      return { state: 'open', additions: 1, deletions: 1 }
+    })
+
+    const data = await warmPrCache()
+    expect(data.prs.map((p) => p.number)).toEqual([1])
+  })
+
+  it('drops a PR that closed after the list call', async () => {
+    mockFetchWithRetry.mockImplementation(async (path) =>
+      path.endsWith('/pulls/1') ? { state: 'closed', merged: true, additions: 1, deletions: 1 } : { state: 'open', additions: 1, deletions: 1 }
+    )
+
+    const data = await warmPrCache()
+    expect(data.prs.map((p) => p.number)).toEqual([])
+  })
+
+  it('throws and keeps the old cache when every PR detail fetch fails', async () => {
+    const old = { fetchedAt: new Date('2026-01-01'), teamMembers: new Set(), prs: [] }
+    cache.set(old)
+    mockFetchWithRetry.mockRejectedValue(new Error('GitHub API error 500'))
+
+    await expect(warmPrCache()).rejects.toThrow('All PR detail fetches failed')
+    expect(cache.get()).toBe(old)
   })
 })

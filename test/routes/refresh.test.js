@@ -6,7 +6,6 @@ jest.unstable_mockModule('../../src/services/prs.js', () => ({
   isBot: jest.fn(() => false),
   isMergeCommit: jest.fn(() => false),
   formatPR: jest.fn(),
-  runWithConcurrency: jest.fn(),
 }))
 
 jest.unstable_mockModule('../../src/services/cache.js', () => ({
